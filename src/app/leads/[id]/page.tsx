@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "@/components/Toast";
+import { PageLoader } from "@/components/LoadingSpinner";
 
 interface Lead {
   id: string;
@@ -50,16 +52,59 @@ const stageLabels: Record<string, { label: string; color: string }> = {
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { showToast } = useToast();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [activeDoc, setActiveDoc] = useState<Document | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Form state
+  const [form, setForm] = useState({
+    client: "",
+    title: "",
+    description: "",
+    source: "recruiter",
+    sourceUrl: "",
+    location: "",
+    remotePolicy: "remote",
+    offeredRate: null as number | null,
+    estimatedStartDate: "",
+    estimatedDuration: null as number | null,
+    requiredTechnologies: [] as string[],
+    requiredDomains: [] as string[],
+    contactName: "",
+    contactInfo: "",
+    notes: "",
+  });
+  const [techInput, setTechInput] = useState("");
+  const [domainInput, setDomainInput] = useState("");
 
   useEffect(() => {
     fetch(`/api/leads/${id}`)
       .then((res) => res.json())
       .then((data) => {
         setLead(data);
+        setForm({
+          client: data.client || "",
+          title: data.title || "",
+          description: data.description || "",
+          source: data.source || "recruiter",
+          sourceUrl: data.sourceUrl || "",
+          location: data.location || "",
+          remotePolicy: data.remotePolicy || "remote",
+          offeredRate: data.offeredRate,
+          estimatedStartDate: data.estimatedStartDate ? data.estimatedStartDate.split("T")[0] : "",
+          estimatedDuration: data.estimatedDuration,
+          requiredTechnologies: data.requiredTechnologies ? JSON.parse(data.requiredTechnologies) : [],
+          requiredDomains: data.requiredDomains ? JSON.parse(data.requiredDomains) : [],
+          contactName: data.contactName || "",
+          contactInfo: data.contactInfo || "",
+          notes: data.notes || "",
+        });
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -68,46 +113,135 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const updateStage = async (newStage: string) => {
     if (!lead) return;
 
-    await fetch(`/api/leads/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...lead, stage: newStage }),
-    });
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lead, stage: newStage }),
+      });
 
-    setLead({ ...lead, stage: newStage });
+      if (res.ok) {
+        const updated = await res.json();
+        setLead({ ...lead, stage: newStage, matchScore: updated.matchScore });
+        showToast(`Moved to ${stageLabels[newStage].label}`);
+      } else {
+        showToast("Failed to update stage", "error");
+      }
+    } catch {
+      showToast("Failed to update stage", "error");
+    }
+  };
+
+  const handleSave = async () => {
+    // Validation
+    if (!form.title.trim()) {
+      showToast("Job title is required", "error");
+      return;
+    }
+    if (!form.client.trim()) {
+      showToast("Client is required", "error");
+      return;
+    }
+
+    setSaving(true);
+
+    const payload = {
+      ...form,
+      requiredTechnologies: JSON.stringify(form.requiredTechnologies),
+      requiredDomains: JSON.stringify(form.requiredDomains),
+      estimatedStartDate: form.estimatedStartDate || null,
+      stage: lead?.stage,
+    };
+
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setLead({
+          ...lead!,
+          ...updated,
+          documents: lead!.documents,
+        });
+        setEditing(false);
+        showToast("Lead updated successfully");
+      } else {
+        showToast("Failed to save changes", "error");
+      }
+    } catch {
+      showToast("Failed to save changes", "error");
+    }
+    setSaving(false);
   };
 
   const generateDocument = async (type: string) => {
     setGenerating(type);
 
-    const res = await fetch(`/api/leads/${id}/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type }),
-    });
+    try {
+      const res = await fetch(`/api/leads/${id}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
 
-    const doc = await res.json();
+      if (res.ok) {
+        const doc = await res.json();
+        if (lead) {
+          setLead({ ...lead, documents: [...lead.documents, doc] });
+          setActiveDoc(doc);
+        }
+        showToast(`${type === "cover_letter" ? "Cover letter" : "Key questions"} generated`);
+      } else {
+        showToast("Failed to generate document", "error");
+      }
+    } catch {
+      showToast("Failed to generate document", "error");
+    }
     setGenerating(null);
+  };
 
-    if (lead) {
-      setLead({ ...lead, documents: [...lead.documents, doc] });
-      setActiveDoc(doc);
+  const copyToClipboard = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      showToast("Copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast("Failed to copy", "error");
     }
   };
 
   const deleteLead = async () => {
-    if (!confirm("Are you sure you want to delete this lead?")) return;
+    try {
+      await fetch(`/api/leads/${id}`, { method: "DELETE" });
+      showToast("Lead deleted");
+      router.push("/leads");
+    } catch {
+      showToast("Failed to delete lead", "error");
+    }
+  };
 
-    await fetch(`/api/leads/${id}`, { method: "DELETE" });
-    router.push("/leads");
+  const addToArray = (
+    field: "requiredTechnologies" | "requiredDomains",
+    value: string,
+    setter: (v: string) => void
+  ) => {
+    if (value.trim() && !form[field].includes(value.trim())) {
+      setForm({ ...form, [field]: [...form[field], value.trim()] });
+      setter("");
+    }
+  };
+
+  const removeFromArray = (field: "requiredTechnologies" | "requiredDomains", value: string) => {
+    setForm({ ...form, [field]: form[field].filter((v) => v !== value) });
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!lead) {
@@ -181,199 +315,480 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Lead Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Quick Info */}
-            <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-              <h2 className="font-semibold mb-4">Details</h2>
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                {lead.offeredRate && (
-                  <div>
-                    <dt className="text-gray-500">Rate</dt>
-                    <dd className="font-medium">{lead.offeredRate}€/day</dd>
-                  </div>
-                )}
-                {lead.location && (
-                  <div>
-                    <dt className="text-gray-500">Location</dt>
-                    <dd className="font-medium">{lead.location}</dd>
-                  </div>
-                )}
-                {lead.remotePolicy && (
-                  <div>
-                    <dt className="text-gray-500">Remote Policy</dt>
-                    <dd className="font-medium capitalize">{lead.remotePolicy}</dd>
-                  </div>
-                )}
-                {lead.estimatedDuration && (
-                  <div>
-                    <dt className="text-gray-500">Duration</dt>
-                    <dd className="font-medium">{lead.estimatedDuration} months</dd>
-                  </div>
-                )}
-                {lead.estimatedStartDate && (
-                  <div>
-                    <dt className="text-gray-500">Start Date</dt>
-                    <dd className="font-medium">
-                      {new Date(lead.estimatedStartDate).toLocaleDateString()}
-                    </dd>
-                  </div>
-                )}
-                <div>
-                  <dt className="text-gray-500">Source</dt>
-                  <dd className="font-medium capitalize">{lead.source}</dd>
-                </div>
-              </dl>
-            </section>
+        {editing ? (
+          /* Edit Form */
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="font-semibold mb-6">Edit Lead</h2>
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Job Title">
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Client">
+                  <input
+                    type="text"
+                    value={form.client}
+                    onChange={(e) => setForm({ ...form, client: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+              </div>
 
-            {/* Technologies */}
-            {requiredTechs.length > 0 && (
-              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Required Technologies</h2>
-                <div className="flex flex-wrap gap-2">
-                  {requiredTechs.map((tech: string) => (
-                    <span
-                      key={tech}
-                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm"
-                    >
-                      {tech}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
+              <Field label="Description">
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="input min-h-[100px]"
+                />
+              </Field>
 
-            {/* Description */}
-            {lead.description && (
-              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Description</h2>
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                  {lead.description}
-                </p>
-              </section>
-            )}
-
-            {/* Generated Document */}
-            {activeDoc && (
-              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-semibold">
-                    {activeDoc.type === "cover_letter"
-                      ? "Cover Letter"
-                      : "Key Questions"}
-                  </h2>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(activeDoc.content)}
-                    className="text-sm text-blue-600 hover:text-blue-700"
+              {/* Source */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Source">
+                  <select
+                    value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                    className="input"
                   >
-                    Copy to clipboard
+                    <option value="recruiter">Recruiter</option>
+                    <option value="freework">Freework.com</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="comet">Comet</option>
+                    <option value="referral">Referral</option>
+                    <option value="direct">Direct</option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Source URL">
+                  <input
+                    type="url"
+                    value={form.sourceUrl}
+                    onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+              </div>
+
+              {/* Location & Rate */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field label="Location">
+                  <input
+                    type="text"
+                    value={form.location}
+                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Remote Policy">
+                  <select
+                    value={form.remotePolicy}
+                    onChange={(e) => setForm({ ...form, remotePolicy: e.target.value })}
+                    className="input"
+                  >
+                    <option value="remote">Full Remote</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="onsite">On-site</option>
+                  </select>
+                </Field>
+                <Field label="Offered Rate">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={form.offeredRate ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, offeredRate: e.target.value ? parseInt(e.target.value) : null })
+                      }
+                      className="input w-28"
+                      min={0}
+                    />
+                    <span className="text-gray-500">€/day</span>
+                  </div>
+                </Field>
+              </div>
+
+              {/* Timeline */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Estimated Start">
+                  <input
+                    type="date"
+                    value={form.estimatedStartDate}
+                    onChange={(e) => setForm({ ...form, estimatedStartDate: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Duration">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={form.estimatedDuration ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, estimatedDuration: e.target.value ? parseInt(e.target.value) : null })
+                      }
+                      className="input w-20"
+                      min={1}
+                    />
+                    <span className="text-gray-500">months</span>
+                  </div>
+                </Field>
+              </div>
+
+              {/* Technologies */}
+              <Field label="Required Technologies">
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={techInput}
+                    onChange={(e) => setTechInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addToArray("requiredTechnologies", techInput, setTechInput);
+                      }
+                    }}
+                    className="input flex-1"
+                    placeholder="Add technology..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addToArray("requiredTechnologies", techInput, setTechInput)}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Add
                   </button>
                 </div>
-                <div className="prose dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto">
-                    {activeDoc.content}
-                  </pre>
+                <TagList items={form.requiredTechnologies} onRemove={(v) => removeFromArray("requiredTechnologies", v)} />
+              </Field>
+
+              {/* Contact */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Contact Name">
+                  <input
+                    type="text"
+                    value={form.contactName}
+                    onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Contact Info">
+                  <input
+                    type="text"
+                    value={form.contactInfo}
+                    onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
+                    className="input"
+                  />
+                </Field>
+              </div>
+
+              {/* Notes */}
+              <Field label="Notes">
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="input min-h-[80px]"
+                />
+              </Field>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* View Mode */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Lead Details */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Quick Info */}
+              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-semibold">Details</h2>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  {lead.offeredRate && (
+                    <div>
+                      <dt className="text-gray-500">Rate</dt>
+                      <dd className="font-medium">{lead.offeredRate}€/day</dd>
+                    </div>
+                  )}
+                  {lead.location && (
+                    <div>
+                      <dt className="text-gray-500">Location</dt>
+                      <dd className="font-medium">{lead.location}</dd>
+                    </div>
+                  )}
+                  {lead.remotePolicy && (
+                    <div>
+                      <dt className="text-gray-500">Remote Policy</dt>
+                      <dd className="font-medium capitalize">{lead.remotePolicy}</dd>
+                    </div>
+                  )}
+                  {lead.estimatedDuration && (
+                    <div>
+                      <dt className="text-gray-500">Duration</dt>
+                      <dd className="font-medium">{lead.estimatedDuration} months</dd>
+                    </div>
+                  )}
+                  {lead.estimatedStartDate && (
+                    <div>
+                      <dt className="text-gray-500">Start Date</dt>
+                      <dd className="font-medium">
+                        {new Date(lead.estimatedStartDate).toLocaleDateString()}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-gray-500">Source</dt>
+                    <dd className="font-medium capitalize">{lead.source}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              {/* Technologies */}
+              {requiredTechs.length > 0 && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h2 className="font-semibold mb-4">Required Technologies</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {requiredTechs.map((tech: string) => (
+                      <span
+                        key={tech}
+                        className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Description */}
+              {lead.description && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h2 className="font-semibold mb-4">Description</h2>
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {lead.description}
+                  </p>
+                </section>
+              )}
+
+              {/* Notes */}
+              {lead.notes && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h2 className="font-semibold mb-4">Notes</h2>
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {lead.notes}
+                  </p>
+                </section>
+              )}
+
+              {/* Generated Document */}
+              {activeDoc && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="font-semibold">
+                      {activeDoc.type === "cover_letter"
+                        ? "Cover Letter"
+                        : "Key Questions"}
+                    </h2>
+                    <button
+                      onClick={() => copyToClipboard(activeDoc.content)}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {copied ? "Copied!" : "Copy to clipboard"}
+                    </button>
+                  </div>
+                  <div className="prose dark:prose-invert max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto">
+                      {activeDoc.content}
+                    </pre>
+                  </div>
+                </section>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Generate Documents */}
+              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h2 className="font-semibold mb-4">Generate Documents</h2>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => generateDocument("cover_letter")}
+                    disabled={generating !== null}
+                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {generating === "cover_letter"
+                      ? "Generating..."
+                      : "Cover Letter"}
+                  </button>
+                  <button
+                    onClick={() => generateDocument("key_questions")}
+                    disabled={generating !== null}
+                    className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    {generating === "key_questions"
+                      ? "Generating..."
+                      : "Key Questions"}
+                  </button>
                 </div>
               </section>
-            )}
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Generate Documents */}
-            <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-              <h2 className="font-semibold mb-4">Generate Documents</h2>
-              <div className="space-y-3">
-                <button
-                  onClick={() => generateDocument("cover_letter")}
-                  disabled={generating !== null}
-                  className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {generating === "cover_letter"
-                    ? "Generating..."
-                    : "Cover Letter"}
-                </button>
-                <button
-                  onClick={() => generateDocument("key_questions")}
-                  disabled={generating !== null}
-                  className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  {generating === "key_questions"
-                    ? "Generating..."
-                    : "Key Questions"}
-                </button>
-              </div>
-            </section>
+              {/* Contact */}
+              {(lead.contactName || lead.contactInfo) && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h2 className="font-semibold mb-4">Contact</h2>
+                  {lead.contactName && (
+                    <p className="font-medium">{lead.contactName}</p>
+                  )}
+                  {lead.contactInfo && (
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      {lead.contactInfo}
+                    </p>
+                  )}
+                </section>
+              )}
 
-            {/* Contact */}
-            {(lead.contactName || lead.contactInfo) && (
+              {/* Previous Documents */}
+              {lead.documents.length > 0 && (
+                <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h2 className="font-semibold mb-4">Generated Documents</h2>
+                  <ul className="space-y-2">
+                    {lead.documents.map((doc) => (
+                      <li key={doc.id}>
+                        <button
+                          onClick={() => setActiveDoc(doc)}
+                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                            activeDoc?.id === doc.id
+                              ? "bg-gray-100 dark:bg-gray-700"
+                              : ""
+                          }`}
+                        >
+                          {doc.type === "cover_letter"
+                            ? "Cover Letter"
+                            : "Key Questions"}
+                          <span className="text-gray-500 ml-2">
+                            {new Date(doc.createdAt).toLocaleDateString()}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Actions */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Contact</h2>
-                {lead.contactName && (
-                  <p className="font-medium">{lead.contactName}</p>
-                )}
-                {lead.contactInfo && (
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">
-                    {lead.contactInfo}
-                  </p>
-                )}
-              </section>
-            )}
-
-            {/* Previous Documents */}
-            {lead.documents.length > 0 && (
-              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Generated Documents</h2>
-                <ul className="space-y-2">
-                  {lead.documents.map((doc) => (
-                    <li key={doc.id}>
-                      <button
-                        onClick={() => setActiveDoc(doc)}
-                        className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                          activeDoc?.id === doc.id
-                            ? "bg-gray-100 dark:bg-gray-700"
-                            : ""
-                        }`}
-                      >
-                        {doc.type === "cover_letter"
-                          ? "Cover Letter"
-                          : "Key Questions"}
-                        <span className="text-gray-500 ml-2">
-                          {new Date(doc.createdAt).toLocaleDateString()}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {/* Actions */}
-            <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-              <h2 className="font-semibold mb-4">Actions</h2>
-              <div className="space-y-3">
-                {lead.sourceUrl && (
-                  <a
-                    href={lead.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full py-2 px-4 text-center bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                <h2 className="font-semibold mb-4">Actions</h2>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   >
-                    View Original Posting
-                  </a>
-                )}
-                <button
-                  onClick={deleteLead}
-                  className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                >
-                  Delete Lead
-                </button>
-              </div>
-            </section>
+                    Edit Lead
+                  </button>
+                  {lead.sourceUrl && (
+                    <a
+                      href={lead.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full py-2 px-4 text-center bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      View Original Posting
+                    </a>
+                  )}
+                  {confirmDelete ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={deleteLead}
+                        className="flex-1 py-2 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    >
+                      Delete Lead
+                    </button>
+                  )}
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      <style jsx>{`
+        .input {
+          @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500;
+        }
+      `}</style>
     </main>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TagList({ items, onRemove }: { items: string[]; onRemove: (item: string) => void }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm"
+        >
+          {item}
+          <button
+            type="button"
+            onClick={() => onRemove(item)}
+            className="hover:text-red-600 dark:hover:text-red-400"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+    </div>
   );
 }

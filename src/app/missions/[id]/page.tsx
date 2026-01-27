@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "@/components/Toast";
+import { PageLoader } from "@/components/LoadingSpinner";
 
 interface Mission {
   id: string;
@@ -19,10 +21,12 @@ interface Mission {
 export default function MissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { showToast } = useToast();
   const [mission, setMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -57,49 +61,70 @@ export default function MissionDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   const handleSave = async () => {
+    if (!form.title.trim()) {
+      showToast("Title is required", "error");
+      return;
+    }
+    if (!form.client.trim()) {
+      showToast("Client is required", "error");
+      return;
+    }
+
     setSaving(true);
 
-    const res = await fetch(`/api/missions/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    try {
+      const res = await fetch(`/api/missions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    if (res.ok) {
-      const updated = await res.json();
-      setMission(updated);
-      setEditing(false);
+      if (res.ok) {
+        const updated = await res.json();
+        setMission(updated);
+        setEditing(false);
+        showToast("Mission updated", "success");
+      } else {
+        showToast("Failed to update mission", "error");
+      }
+    } catch {
+      showToast("An error occurred", "error");
     }
     setSaving(false);
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this mission?")) return;
-
-    await fetch(`/api/missions/${id}`, { method: "DELETE" });
-    router.push("/missions");
+    try {
+      await fetch(`/api/missions/${id}`, { method: "DELETE" });
+      showToast("Mission deleted", "success");
+      router.push("/missions");
+    } catch {
+      showToast("Failed to delete mission", "error");
+      setShowDeleteConfirm(false);
+    }
   };
 
   const markAsCompleted = async () => {
     setForm({ ...form, status: "completed" });
     setSaving(true);
 
-    await fetch(`/api/missions/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, status: "completed" }),
-    });
+    try {
+      await fetch(`/api/missions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, status: "completed" }),
+      });
 
-    setMission({ ...mission!, status: "completed" });
+      setMission({ ...mission!, status: "completed" });
+      showToast("Mission marked as completed", "success");
+    } catch {
+      showToast("Failed to update mission", "error");
+    }
     setSaving(false);
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!mission) {
@@ -339,12 +364,34 @@ export default function MissionDetailPage({ params }: { params: Promise<{ id: st
                     {saving ? "Updating..." : "Mark as Completed"}
                   </button>
                 )}
-                <button
-                  onClick={handleDelete}
-                  className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                >
-                  Delete Mission
-                </button>
+                {showDeleteConfirm ? (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+                    <p className="text-sm text-red-800 dark:text-red-200 mb-3">
+                      Are you sure you want to delete this mission?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDelete}
+                        className="px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
+                      >
+                        Yes, delete
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md text-sm hover:bg-gray-200 dark:hover:bg-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  >
+                    Delete Mission
+                  </button>
+                )}
               </div>
             </div>
           </div>

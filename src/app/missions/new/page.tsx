@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
 
 interface MissionForm {
   client: string;
@@ -25,28 +26,53 @@ const defaultMission: MissionForm = {
 
 export default function NewMissionPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [mission, setMission] = useState<MissionForm>(defaultMission);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!mission.title.trim()) {
+      showToast("Title is required", "error");
+      return;
+    }
+    if (!mission.client.trim()) {
+      showToast("Client is required", "error");
+      return;
+    }
+    if (!mission.startDate) {
+      showToast("Start date is required", "error");
+      return;
+    }
+    if (!mission.rate) {
+      showToast("Daily rate is required", "error");
+      return;
+    }
+
     setSaving(true);
 
-    const res = await fetch("/api/missions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...mission,
-        startDate: mission.startDate || null,
-        endDate: mission.endDate || null,
-      }),
-    });
+    try {
+      const res = await fetch("/api/missions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...mission,
+          startDate: mission.startDate || null,
+          endDate: mission.endDate || null,
+        }),
+      });
 
-    if (res.ok) {
-      router.push("/missions");
-    } else {
+      if (res.ok) {
+        showToast("Mission added successfully", "success");
+        router.push("/missions");
+      } else {
+        showToast("Failed to create mission. Make sure you have a profile set up first.", "error");
+        setSaving(false);
+      }
+    } catch {
+      showToast("An error occurred while creating mission", "error");
       setSaving(false);
-      alert("Failed to create mission. Make sure you have a profile set up first.");
     }
   };
 

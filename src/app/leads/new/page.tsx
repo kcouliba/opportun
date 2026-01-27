@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
 
 interface LeadForm {
   client: string;
@@ -41,6 +42,7 @@ const defaultLead: LeadForm = {
 
 export default function NewLeadPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [lead, setLead] = useState<LeadForm>(defaultLead);
   const [saving, setSaving] = useState(false);
   const [techInput, setTechInput] = useState("");
@@ -48,6 +50,16 @@ export default function NewLeadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!lead.title.trim()) {
+      showToast("Job title is required", "error");
+      return;
+    }
+    if (!lead.client.trim()) {
+      showToast("Client is required", "error");
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -57,18 +69,24 @@ export default function NewLeadPage() {
       estimatedStartDate: lead.estimatedStartDate || null,
     };
 
-    const res = await fetch("/api/leads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (res.ok) {
-      const newLead = await res.json();
-      router.push(`/leads/${newLead.id}`);
-    } else {
+      if (res.ok) {
+        const newLead = await res.json();
+        showToast("Lead added successfully", "success");
+        router.push(`/leads/${newLead.id}`);
+      } else {
+        showToast("Failed to create lead. Make sure you have a profile set up first.", "error");
+        setSaving(false);
+      }
+    } catch {
+      showToast("An error occurred while creating lead", "error");
       setSaving(false);
-      alert("Failed to create lead. Make sure you have a profile set up first.");
     }
   };
 

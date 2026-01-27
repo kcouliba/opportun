@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { calculateMatchScore } from "@/lib/matching";
 
 // GET - Fetch a single lead
 export async function GET(
@@ -28,6 +29,36 @@ export async function PUT(
   const { id } = await params;
   const data = await request.json();
 
+  // Get profile for recalculating match score
+  const profile = await prisma.profile.findFirst();
+
+  let matchScore = null;
+  let autoFiltered = false;
+
+  if (profile) {
+    const profileData = {
+      technologies: profile.technologies ? JSON.parse(profile.technologies) : [],
+      domains: profile.domains ? JSON.parse(profile.domains) : [],
+      minimumTJM: profile.minimumTJM,
+      targetTJM: profile.targetTJM,
+      preferredLocations: profile.preferredLocations ? JSON.parse(profile.preferredLocations) : [],
+      blacklistedClients: profile.blacklistedClients ? JSON.parse(profile.blacklistedClients) : [],
+      blacklistedDomains: profile.blacklistedDomains ? JSON.parse(profile.blacklistedDomains) : [],
+    };
+
+    const leadData = {
+      requiredTechnologies: data.requiredTechnologies ? JSON.parse(data.requiredTechnologies) : [],
+      requiredDomains: data.requiredDomains ? JSON.parse(data.requiredDomains) : [],
+      offeredRate: data.offeredRate,
+      location: data.location,
+      client: data.client,
+    };
+
+    const result = calculateMatchScore(profileData, leadData);
+    matchScore = result.score;
+    autoFiltered = result.autoFiltered;
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
@@ -49,6 +80,8 @@ export async function PUT(
       stage: data.stage,
       nextAction: data.nextAction,
       nextActionDate: data.nextActionDate ? new Date(data.nextActionDate) : null,
+      matchScore,
+      autoFiltered,
     },
   });
 

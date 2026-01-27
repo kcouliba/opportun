@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
+import { PageLoader } from "@/components/LoadingSpinner";
 
 interface Profile {
   id?: string;
@@ -36,6 +38,7 @@ const defaultProfile: Profile = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +68,12 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!profile.name.trim()) {
+      showToast("Name is required", "error");
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -76,14 +85,24 @@ export default function ProfilePage() {
       blacklistedDomains: JSON.stringify(profile.blacklistedDomains),
     };
 
-    await fetch("/api/profile", {
-      method: profile.id ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/profile", {
+        method: profile.id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    setSaving(false);
-    router.push("/");
+      if (res.ok) {
+        showToast("Profile saved successfully", "success");
+        router.push("/");
+      } else {
+        showToast("Failed to save profile", "error");
+        setSaving(false);
+      }
+    } catch {
+      showToast("An error occurred while saving", "error");
+      setSaving(false);
+    }
   };
 
   const addToArray = (
@@ -105,11 +124,7 @@ export default function ProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return (
