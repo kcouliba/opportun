@@ -114,8 +114,9 @@ function MissionCard({ mission, isActive }: { mission: Mission; isActive?: boole
       : "";
 
   return (
-    <div
-      className={`bg-white dark:bg-gray-800 rounded-lg border p-6 ${
+    <Link
+      href={`/missions/${mission.id}`}
+      className={`block bg-white dark:bg-gray-800 rounded-lg border p-6 hover:shadow-md transition-shadow ${
         isActive
           ? "border-blue-200 dark:border-blue-800"
           : "border-gray-200 dark:border-gray-700"
@@ -150,6 +151,6 @@ function MissionCard({ mission, isActive }: { mission: Mission; isActive?: boole
           <span className="capitalize">{mission.status}</span>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
