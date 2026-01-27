@@ -5,7 +5,9 @@ async function getDashboardData() {
   const [profile, missions, leads] = await Promise.all([
     prisma.profile.findFirst(),
     prisma.mission.findMany({ where: { status: "active" } }),
-    prisma.lead.findMany(),
+    prisma.lead.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const activeMission = missions[0];
@@ -19,6 +21,34 @@ async function getDashboardData() {
   const qualifiedLeads = leads.filter((l) => l.stage === "qualified" || l.stage === "negotiating");
   const highMatchLeads = leads.filter((l) => (l.matchScore ?? 0) >= 70 && l.stage === "lead");
 
+  // Follow-up logic
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const leadsWithFollowUp = activeLeads
+    .filter((l) => l.nextActionDate)
+    .map((l) => {
+      const actionDate = new Date(l.nextActionDate!);
+      actionDate.setHours(0, 0, 0, 0);
+      const isOverdue = actionDate < today;
+      const isToday = actionDate.getTime() === today.getTime();
+      const daysUntil = Math.ceil((actionDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return { ...l, isOverdue, isToday, daysUntil };
+    })
+    .sort((a, b) => {
+      // Overdue first, then today, then by date ascending
+      if (a.isOverdue && !b.isOverdue) return -1;
+      if (!a.isOverdue && b.isOverdue) return 1;
+      if (a.isToday && !b.isToday) return -1;
+      if (!a.isToday && b.isToday) return 1;
+      return a.daysUntil - b.daysUntil;
+    });
+
+  const overdueCount = leadsWithFollowUp.filter((l) => l.isOverdue).length;
+  const todayCount = leadsWithFollowUp.filter((l) => l.isToday).length;
+
   return {
     hasProfile: !!profile,
     profileName: profile?.name || null,
@@ -28,6 +58,10 @@ async function getDashboardData() {
     qualifiedCount: qualifiedLeads.length,
     highMatchCount: highMatchLeads.length,
     recentLeads: leads.slice(0, 5),
+    followUps: leadsWithFollowUp.slice(0, 5),
+    overdueCount,
+    todayCount,
+    totalFollowUps: leadsWithFollowUp.length,
   };
 }
 
@@ -118,7 +152,7 @@ export default async function Home() {
             {data.daysUntilEnd !== null && data.daysUntilEnd <= 60 && data.qualifiedCount === 0 && (
               <section className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-amber-800 dark:text-amber-200 font-medium">
-                  ⚠️ Mission ends in {data.daysUntilEnd} days and you have no qualified leads
+                  Mission ends in {data.daysUntilEnd} days and you have no qualified leads
                 </p>
                 <p className="text-amber-700 dark:text-amber-300 text-sm mt-1">
                   Consider adding more leads to your pipeline.{" "}
@@ -129,8 +163,80 @@ export default async function Home() {
               </section>
             )}
 
-            {/* Recent Leads */}
-            {data.recentLeads.length > 0 && (
+            {/* Follow-ups Section */}
+            {data.followUps.length > 0 && (
+              <section className="mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold">Follow-ups</h2>
+                    <p className="text-sm text-gray-500">
+                      {data.overdueCount > 0 && (
+                        <span className="text-red-600 font-medium">{data.overdueCount} overdue</span>
+                      )}
+                      {data.overdueCount > 0 && data.todayCount > 0 && " · "}
+                      {data.todayCount > 0 && (
+                        <span className="text-amber-600 font-medium">{data.todayCount} today</span>
+                      )}
+                      {(data.overdueCount > 0 || data.todayCount > 0) && data.totalFollowUps > data.overdueCount + data.todayCount && " · "}
+                      {data.totalFollowUps > data.overdueCount + data.todayCount && (
+                        <span>{data.totalFollowUps - data.overdueCount - data.todayCount} upcoming</span>
+                      )}
+                    </p>
+                  </div>
+                  <Link href="/leads" className="text-sm text-blue-600 hover:text-blue-700">
+                    View all →
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {data.followUps.map((lead) => (
+                    <Link
+                      key={lead.id}
+                      href={`/leads/${lead.id}`}
+                      className={`block p-4 rounded-lg border transition-colors ${
+                        lead.isOverdue
+                          ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30"
+                          : lead.isToday
+                          ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                          : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">{lead.client}</p>
+                          <p className="text-sm text-gray-500">{lead.contactName || lead.title}</p>
+                          {lead.nextAction && (
+                            <p className="text-xs text-gray-400 mt-1">{lead.nextAction}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className={`text-sm font-medium ${
+                              lead.isOverdue
+                                ? "text-red-600 dark:text-red-400"
+                                : lead.isToday
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {lead.isOverdue
+                              ? `${Math.abs(lead.daysUntil)}d overdue`
+                              : lead.isToday
+                              ? "Today"
+                              : `in ${lead.daysUntil}d`}
+                          </span>
+                          {lead.contactInfo && (
+                            <p className="text-xs text-gray-400 mt-1">{lead.contactInfo}</p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Recent Leads - only show if no follow-ups to avoid clutter */}
+            {data.recentLeads.length > 0 && data.followUps.length === 0 && (
               <section>
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold">Recent Leads</h2>

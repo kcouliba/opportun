@@ -68,6 +68,8 @@ export async function POST(request: Request) {
       contactName: data.contactName || null,
       contactInfo: data.contactInfo || null,
       notes: data.notes || null,
+      nextAction: data.nextAction || null,
+      nextActionDate: data.nextActionDate ? new Date(data.nextActionDate) : null,
       matchScore: score,
       autoFiltered,
       stage: autoFiltered ? "lost" : "lead",
