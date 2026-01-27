@@ -1,60 +1,176 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
-export default function Home() {
+async function getDashboardData() {
+  const [profile, missions, leads] = await Promise.all([
+    prisma.profile.findFirst(),
+    prisma.mission.findMany({ where: { status: "active" } }),
+    prisma.lead.findMany(),
+  ]);
+
+  const activeMission = missions[0];
+  const daysUntilEnd = activeMission?.endDate
+    ? Math.ceil(
+        (new Date(activeMission.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    : null;
+
+  const activeLeads = leads.filter((l) => !["won", "lost"].includes(l.stage));
+  const qualifiedLeads = leads.filter((l) => l.stage === "qualified" || l.stage === "negotiating");
+  const highMatchLeads = leads.filter((l) => (l.matchScore ?? 0) >= 70 && l.stage === "lead");
+
+  return {
+    hasProfile: !!profile,
+    profileName: profile?.name || null,
+    activeMission,
+    daysUntilEnd,
+    pipelineCount: activeLeads.length,
+    qualifiedCount: qualifiedLeads.length,
+    highMatchCount: highMatchLeads.length,
+    recentLeads: leads.slice(0, 5),
+  };
+}
+
+export default async function Home() {
+  const data = await getDashboardData();
+  const isSetUp = data.hasProfile;
+
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="mb-12">
-          <h1 className="text-3xl font-bold mb-2">Opportun</h1>
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold mb-1">
+            {data.profileName ? `Welcome back, ${data.profileName.split(" ")[0]}` : "Dashboard"}
+          </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Leads come to you, filtered and ready. One click to apply.
+            {isSetUp
+              ? "Your pipeline at a glance"
+              : "Set up your profile to get started"}
           </p>
         </header>
 
-        {/* Quick Stats - Dashboard Preview */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <DashboardCard
-            title="Current Mission"
-            value="No active mission"
-            subtitle="Set up your current work"
-            href="/missions"
-            variant="warning"
-          />
-          <DashboardCard
-            title="Pipeline"
-            value="0 leads"
-            subtitle="Add your first opportunity"
-            href="/leads"
-          />
-          <DashboardCard
-            title="Profile"
-            value="Not set up"
-            subtitle="Complete your profile to enable matching"
-            href="/profile"
-            variant="primary"
-          />
-        </section>
+        {!isSetUp ? (
+          /* Getting Started - Show when not set up */
+          <section className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Get Started</h2>
+            <ol className="space-y-4">
+              <Step number={1} title="Set up your profile" href="/profile" done={data.hasProfile}>
+                Add your skills, rate expectations, and deal-breakers.
+                This powers the smart filtering.
+              </Step>
+              <Step number={2} title="Add your current mission" href="/missions/new" done={!!data.activeMission}>
+                Track when your income stops so you know when to act.
+              </Step>
+              <Step number={3} title="Add leads to your pipeline" href="/leads/new" done={data.pipelineCount > 0}>
+                Manual entry for now. We&apos;ll match them against your profile.
+              </Step>
+              <Step number={4} title="Generate documents" href="/leads" done={false}>
+                One-click cover letters and key questions for qualified leads.
+              </Step>
+            </ol>
+          </section>
+        ) : (
+          /* Dashboard - Show when set up */
+          <>
+            {/* Key Metrics */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <DashboardCard
+                title="Mission Ends In"
+                value={
+                  data.daysUntilEnd !== null
+                    ? `${data.daysUntilEnd} days`
+                    : "No mission"
+                }
+                subtitle={data.activeMission?.client || "Add your current work"}
+                href="/missions"
+                variant={
+                  data.daysUntilEnd === null
+                    ? "warning"
+                    : data.daysUntilEnd <= 30
+                    ? "danger"
+                    : data.daysUntilEnd <= 60
+                    ? "warning"
+                    : "success"
+                }
+              />
+              <DashboardCard
+                title="Pipeline"
+                value={`${data.pipelineCount} leads`}
+                subtitle={
+                  data.qualifiedCount > 0
+                    ? `${data.qualifiedCount} qualified`
+                    : "No qualified leads yet"
+                }
+                href="/leads"
+                variant={data.pipelineCount === 0 ? "warning" : "default"}
+              />
+              <DashboardCard
+                title="High Match"
+                value={`${data.highMatchCount} leads`}
+                subtitle="70%+ match score"
+                href="/leads"
+                variant={data.highMatchCount > 0 ? "success" : "default"}
+              />
+            </section>
 
-        {/* Getting Started */}
-        <section className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Get Started</h2>
-          <ol className="space-y-4">
-            <Step number={1} title="Set up your profile" href="/profile">
-              Add your skills, rate expectations, and deal-breakers.
-              This powers the smart filtering.
-            </Step>
-            <Step number={2} title="Add your current mission" href="/missions/new">
-              Track when your income stops so you know when to act.
-            </Step>
-            <Step number={3} title="Add leads to your pipeline" href="/leads/new">
-              Manual entry for now. We&apos;ll match them against your profile.
-            </Step>
-            <Step number={4} title="Generate documents" href="/leads">
-              One-click cover letters and key questions for qualified leads.
-            </Step>
-          </ol>
-        </section>
+            {/* Alerts */}
+            {data.daysUntilEnd !== null && data.daysUntilEnd <= 60 && data.qualifiedCount === 0 && (
+              <section className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-amber-800 dark:text-amber-200 font-medium">
+                  ⚠️ Mission ends in {data.daysUntilEnd} days and you have no qualified leads
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 text-sm mt-1">
+                  Consider adding more leads to your pipeline.{" "}
+                  <Link href="/leads/new" className="underline font-medium">
+                    Add a lead →
+                  </Link>
+                </p>
+              </section>
+            )}
+
+            {/* Recent Leads */}
+            {data.recentLeads.length > 0 && (
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold">Recent Leads</h2>
+                  <Link href="/leads" className="text-sm text-blue-600 hover:text-blue-700">
+                    View all →
+                  </Link>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                  {data.recentLeads.map((lead) => (
+                    <Link
+                      key={lead.id}
+                      href={`/leads/${lead.id}`}
+                      className="flex justify-between items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div>
+                        <p className="font-medium">{lead.title}</p>
+                        <p className="text-sm text-gray-500">{lead.client}</p>
+                      </div>
+                      <div className="text-right">
+                        {lead.matchScore !== null && (
+                          <span
+                            className={`text-sm font-medium ${
+                              lead.matchScore >= 70
+                                ? "text-green-600"
+                                : lead.matchScore >= 40
+                                ? "text-yellow-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {lead.matchScore}%
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </div>
     </main>
   );
@@ -71,12 +187,22 @@ function DashboardCard({
   value: string;
   subtitle: string;
   href: string;
-  variant?: "default" | "primary" | "warning";
+  variant?: "default" | "primary" | "warning" | "danger" | "success";
 }) {
   const variantStyles = {
     default: "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700",
     primary: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
     warning: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800",
+    danger: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
+    success: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
+  };
+
+  const valueColor = {
+    default: "",
+    primary: "text-blue-700 dark:text-blue-300",
+    warning: "text-amber-700 dark:text-amber-300",
+    danger: "text-red-700 dark:text-red-300",
+    success: "text-green-700 dark:text-green-300",
   };
 
   return (
@@ -87,7 +213,7 @@ function DashboardCard({
       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
         {title}
       </h3>
-      <p className="text-2xl font-bold mb-1">{value}</p>
+      <p className={`text-2xl font-bold mb-1 ${valueColor[variant]}`}>{value}</p>
       <p className="text-sm text-gray-600 dark:text-gray-400">{subtitle}</p>
     </Link>
   );
@@ -97,20 +223,33 @@ function Step({
   number,
   title,
   href,
+  done,
   children,
 }: {
   number: number;
   title: string;
   href: string;
+  done?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <li className="flex gap-4">
-      <span className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center font-semibold">
-        {number}
+      <span
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+          done
+            ? "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400"
+            : "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400"
+        }`}
+      >
+        {done ? "✓" : number}
       </span>
       <div>
-        <Link href={href} className="font-medium hover:text-blue-600 dark:hover:text-blue-400">
+        <Link
+          href={href}
+          className={`font-medium hover:text-blue-600 dark:hover:text-blue-400 ${
+            done ? "text-gray-400 line-through" : ""
+          }`}
+        >
           {title}
         </Link>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{children}</p>

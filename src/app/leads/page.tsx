@@ -59,19 +59,11 @@ export default function LeadsPage() {
     <main className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Pipeline</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              {leads.length} total leads
-            </p>
-          </div>
-          <Link
-            href="/leads/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            + Add Lead
-          </Link>
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold mb-2">Pipeline</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {leads.length} total leads
+          </p>
         </header>
 
         {/* Pipeline Overview */}
