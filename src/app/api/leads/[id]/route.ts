@@ -17,7 +17,12 @@ export async function GET(
 
   const lead = await prisma.lead.findUnique({
     where: { id },
-    include: { documents: true },
+    include: {
+      documents: true,
+      activities: {
+        orderBy: { occurredAt: "desc" },
+      },
+    },
   });
 
   if (!lead) {

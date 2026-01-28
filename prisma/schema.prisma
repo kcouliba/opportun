@@ -126,6 +126,9 @@ model Lead {
 
   // Generated documents
   documents Document[]
+
+  // Activities
+  activities Activity[]
 }
 
 // =============================================================================
@@ -165,4 +168,25 @@ model ApiKey {
   // Relations
   profileId String
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================================
+// ACTIVITY - Interaction tracking for leads
+// =============================================================================
+
+model Activity {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type        String    // call, email, meeting, interview, note, other
+  title       String    // Brief description
+  description String?   // Detailed notes
+
+  occurredAt  DateTime  @default(now())  // When it happened
+  duration    Int?      // Duration in minutes (for calls/meetings)
+
+  // Relations
+  leadId String
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }

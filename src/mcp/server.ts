@@ -294,6 +294,93 @@ server.tool(
   }
 );
 
+// =============================================================================
+// ACTIVITY TOOLS
+// =============================================================================
+
+// Tool: List activities for a lead
+server.tool(
+  "list_activities",
+  "List all activities for a specific lead",
+  {
+    leadId: z.string().describe("The lead ID to get activities for"),
+  },
+  async ({ leadId }) => {
+    const result = await apiCall(`/api/leads/${leadId}/activities`);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
+// Tool: Add activity to a lead
+server.tool(
+  "add_activity",
+  "Add a new activity (call, email, meeting, interview, note, other) to a lead",
+  {
+    leadId: z.string().describe("The lead ID to add activity to"),
+    type: z.enum(["call", "email", "meeting", "interview", "note", "other"])
+      .describe("Type of activity"),
+    title: z.string().describe("Brief description of the activity"),
+    description: z.string().optional().describe("Detailed notes about the activity"),
+    occurredAt: z.string().optional().describe("When it happened (ISO format, defaults to now)"),
+    duration: z.number().optional().describe("Duration in minutes (for calls/meetings)"),
+  },
+  async ({ leadId, type, title, description, occurredAt, duration }) => {
+    const result = await apiCall(`/api/leads/${leadId}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ type, title, description, occurredAt, duration }),
+    });
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
+// Tool: Update an activity
+server.tool(
+  "update_activity",
+  "Update an existing activity",
+  {
+    id: z.string().describe("The activity ID to update"),
+    type: z.enum(["call", "email", "meeting", "interview", "note", "other"]).optional()
+      .describe("Type of activity"),
+    title: z.string().optional().describe("Brief description of the activity"),
+    description: z.string().optional().describe("Detailed notes about the activity"),
+    occurredAt: z.string().optional().describe("When it happened (ISO format)"),
+    duration: z.number().optional().describe("Duration in minutes"),
+  },
+  async ({ id, type, title, description, occurredAt, duration }) => {
+    const result = await apiCall(`/api/activities/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type, title, description, occurredAt, duration }),
+    });
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
+// Tool: Delete an activity
+server.tool(
+  "delete_activity",
+  "Delete an activity from a lead",
+  {
+    id: z.string().describe("The activity ID to delete"),
+  },
+  async ({ id }) => {
+    const result = await apiCall(`/api/activities/${id}`, {
+      method: "DELETE",
+    });
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();

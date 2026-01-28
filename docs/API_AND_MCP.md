@@ -176,6 +176,80 @@ DELETE /api/leads/:id
 }
 ```
 
+### Activity Endpoints
+
+#### List Activities for a Lead
+
+```
+GET /api/leads/:id/activities
+```
+
+Returns all activities for a lead, sorted by `occurredAt` descending.
+
+**Response:**
+```json
+[
+  {
+    "id": "cmkwp...",
+    "type": "call",
+    "title": "Initial call with recruiter",
+    "description": "Discussed technical requirements and timeline",
+    "occurredAt": "2026-01-28T10:30:00.000Z",
+    "duration": 15,
+    "leadId": "cmkwoz...",
+    "createdAt": "2026-01-28T10:45:00.000Z",
+    "updatedAt": "2026-01-28T10:45:00.000Z"
+  }
+]
+```
+
+#### Create Activity
+
+```
+POST /api/leads/:id/activities
+```
+
+**Request Body:**
+```json
+{
+  "type": "call",
+  "title": "Follow-up call",
+  "description": "Discussed project scope",
+  "occurredAt": "2026-01-28T14:00:00.000Z",
+  "duration": 30
+}
+```
+
+**Fields:**
+- `type` (required): One of `call`, `email`, `meeting`, `interview`, `note`, `other`
+- `title` (required): Brief description
+- `description` (optional): Detailed notes
+- `occurredAt` (optional): When it happened (ISO format, defaults to now)
+- `duration` (optional): Duration in minutes (for calls/meetings)
+
+#### Update Activity
+
+```
+PUT /api/activities/:id
+```
+
+Same fields as create, all optional.
+
+#### Delete Activity
+
+```
+DELETE /api/activities/:id
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+---
+
 ### Stats Endpoint
 
 ```
@@ -361,6 +435,44 @@ Set the next action for a lead.
 - `id` (required): The lead ID
 - `nextAction` (required): Description of the action
 - `nextActionDate` (optional): Due date (ISO format)
+
+#### list_activities
+
+List all activities for a specific lead.
+
+**Parameters:**
+- `leadId` (required): The lead ID
+
+#### add_activity
+
+Add a new activity to a lead.
+
+**Parameters:**
+- `leadId` (required): The lead ID
+- `type` (required): Activity type (`call`, `email`, `meeting`, `interview`, `note`, `other`)
+- `title` (required): Brief description
+- `description` (optional): Detailed notes
+- `occurredAt` (optional): When it happened (ISO format, defaults to now)
+- `duration` (optional): Duration in minutes
+
+#### update_activity
+
+Update an existing activity.
+
+**Parameters:**
+- `id` (required): The activity ID
+- `type` (optional): Activity type
+- `title` (optional): Brief description
+- `description` (optional): Detailed notes
+- `occurredAt` (optional): When it happened
+- `duration` (optional): Duration in minutes
+
+#### delete_activity
+
+Delete an activity.
+
+**Parameters:**
+- `id` (required): The activity ID
 
 ---
 

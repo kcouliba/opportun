@@ -30,12 +30,23 @@ interface Lead {
   nextActionDate: string | null;
   createdAt: string;
   documents: Document[];
+  activities: Activity[];
 }
 
 interface Document {
   id: string;
   type: string;
   content: string;
+  createdAt: string;
+}
+
+interface Activity {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  occurredAt: string;
+  duration: number | null;
   createdAt: string;
 }
 
@@ -47,6 +58,15 @@ const stageLabels: Record<string, { label: string; color: string }> = {
   negotiating: { label: "Negotiating", color: "bg-yellow-100 text-yellow-800" },
   won: { label: "Won", color: "bg-green-100 text-green-800" },
   lost: { label: "Lost", color: "bg-red-100 text-red-800" },
+};
+
+const activityTypes: Record<string, { label: string; icon: string }> = {
+  call: { label: "Call", icon: "\ud83d\udcde" },
+  email: { label: "Email", icon: "\ud83d\udce7" },
+  meeting: { label: "Meeting", icon: "\ud83e\udd1d" },
+  interview: { label: "Interview", icon: "\ud83d\udcbc" },
+  note: { label: "Note", icon: "\ud83d\udcdd" },
+  other: { label: "Other", icon: "\ud83d\udccb" },
 };
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -61,6 +81,19 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Activity state
+  const [showActivityForm, setShowActivityForm] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [activityForm, setActivityForm] = useState({
+    type: "note",
+    title: "",
+    description: "",
+    occurredAt: "",
+    duration: null as number | null,
+  });
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -223,6 +256,124 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     } catch {
       showToast("Failed to delete lead", "error");
     }
+  };
+
+  const resetActivityForm = () => {
+    setActivityForm({
+      type: "note",
+      title: "",
+      description: "",
+      occurredAt: "",
+      duration: null,
+    });
+    setEditingActivity(null);
+    setShowActivityForm(false);
+  };
+
+  const openAddActivity = () => {
+    resetActivityForm();
+    setShowActivityForm(true);
+  };
+
+  const openEditActivity = (activity: Activity) => {
+    setEditingActivity(activity);
+    setActivityForm({
+      type: activity.type,
+      title: activity.title,
+      description: activity.description || "",
+      occurredAt: activity.occurredAt ? activity.occurredAt.slice(0, 16) : "",
+      duration: activity.duration,
+    });
+    setShowActivityForm(true);
+  };
+
+  const handleSaveActivity = async () => {
+    if (!activityForm.title.trim()) {
+      showToast("Title is required", "error");
+      return;
+    }
+
+    setSavingActivity(true);
+
+    const payload = {
+      type: activityForm.type,
+      title: activityForm.title,
+      description: activityForm.description || null,
+      occurredAt: activityForm.occurredAt || null,
+      duration: activityForm.duration,
+    };
+
+    try {
+      if (editingActivity) {
+        // Update existing activity
+        const res = await fetch(`/api/activities/${editingActivity.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const updated = await res.json();
+          setLead({
+            ...lead!,
+            activities: (lead!.activities ?? []).map((a) =>
+              a.id === editingActivity.id ? updated : a
+            ).sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()),
+          });
+          showToast("Activity updated");
+          resetActivityForm();
+        } else {
+          showToast("Failed to update activity", "error");
+        }
+      } else {
+        // Create new activity
+        const res = await fetch(`/api/leads/${id}/activities`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const newActivity = await res.json();
+          setLead({
+            ...lead!,
+            activities: [newActivity, ...(lead!.activities ?? [])],
+          });
+          showToast("Activity added");
+          resetActivityForm();
+        } else {
+          showToast("Failed to add activity", "error");
+        }
+      }
+    } catch {
+      showToast("Failed to save activity", "error");
+    }
+
+    setSavingActivity(false);
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    setDeletingActivityId(activityId);
+
+    try {
+      const res = await fetch(`/api/activities/${activityId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setLead({
+          ...lead!,
+          activities: (lead!.activities ?? []).filter((a) => a.id !== activityId),
+        });
+        showToast("Activity deleted");
+      } else {
+        showToast("Failed to delete activity", "error");
+      }
+    } catch {
+      showToast("Failed to delete activity", "error");
+    }
+
+    setDeletingActivityId(null);
   };
 
   const addToArray = (
@@ -604,6 +755,175 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </p>
                 </section>
               )}
+
+              {/* Activities */}
+              <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-semibold">Activities</h2>
+                  <button
+                    onClick={openAddActivity}
+                    className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {/* Activity Form */}
+                {showActivityForm && (
+                  <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h3 className="font-medium mb-3">
+                      {editingActivity ? "Edit Activity" : "New Activity"}
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                            Type
+                          </label>
+                          <select
+                            value={activityForm.type}
+                            onChange={(e) =>
+                              setActivityForm({ ...activityForm, type: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                          >
+                            {Object.entries(activityTypes).map(([value, { label, icon }]) => (
+                              <option key={value} value={value}>
+                                {icon} {label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                            Date & Time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={activityForm.occurredAt}
+                            onChange={(e) =>
+                              setActivityForm({ ...activityForm, occurredAt: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          value={activityForm.title}
+                          onChange={(e) =>
+                            setActivityForm({ ...activityForm, title: e.target.value })
+                          }
+                          placeholder="Brief description..."
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          Description (optional)
+                        </label>
+                        <textarea
+                          value={activityForm.description}
+                          onChange={(e) =>
+                            setActivityForm({ ...activityForm, description: e.target.value })
+                          }
+                          placeholder="Detailed notes..."
+                          rows={2}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                        />
+                      </div>
+                      {(activityForm.type === "call" || activityForm.type === "meeting" || activityForm.type === "interview") && (
+                        <div>
+                          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                            Duration (minutes)
+                          </label>
+                          <input
+                            type="number"
+                            value={activityForm.duration ?? ""}
+                            onChange={(e) =>
+                              setActivityForm({
+                                ...activityForm,
+                                duration: e.target.value ? parseInt(e.target.value) : null,
+                              })
+                            }
+                            placeholder="e.g., 30"
+                            min={1}
+                            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                          />
+                        </div>
+                      )}
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          onClick={handleSaveActivity}
+                          disabled={savingActivity}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {savingActivity ? "Saving..." : editingActivity ? "Update" : "Add"}
+                        </button>
+                        <button
+                          onClick={resetActivityForm}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Activity List */}
+                {(lead.activities?.length ?? 0) === 0 && !showActivityForm ? (
+                  <p className="text-gray-500 text-sm">No activities recorded yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(lead.activities ?? []).map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex gap-2">
+                            <span className="text-lg">
+                              {activityTypes[activity.type]?.icon || "\ud83d\udccb"}
+                            </span>
+                            <div>
+                              <p className="font-medium">{activity.title}</p>
+                              {activity.description && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                  {activity.description}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(activity.occurredAt).toLocaleString()}
+                                {activity.duration && ` (${activity.duration} min)`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openEditActivity(activity)}
+                              className="text-sm text-blue-600 hover:text-blue-700"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteActivity(activity.id)}
+                              disabled={deletingActivityId === activity.id}
+                              className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
+                            >
+                              {deletingActivityId === activity.id ? "..." : "\u00d7"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
 
               {/* Generated Document */}
               {activeDoc && (
