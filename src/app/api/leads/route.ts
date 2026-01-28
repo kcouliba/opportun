@@ -1,21 +1,110 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateMatchScore } from "@/lib/matching";
+import { optionalAuth } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
-// GET - Fetch all leads
-export async function GET() {
+// GET - Fetch leads with filtering, pagination, and sorting
+export async function GET(request: NextRequest) {
+  // Optional API key authentication
+  const authResult = await optionalAuth(
+    request.headers.get("Authorization")
+  );
+  if (!authResult.authenticated) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
+  }
+
+  const searchParams = request.nextUrl.searchParams;
+
+  // Filtering
+  const stage = searchParams.get("stage");
+  const minScore = searchParams.get("minScore");
+  const maxScore = searchParams.get("maxScore");
+  const client = searchParams.get("client");
+  const technology = searchParams.get("technology");
+  const autoFiltered = searchParams.get("autoFiltered");
+  const source = searchParams.get("source");
+
+  // Pagination
+  const limit = parseInt(searchParams.get("limit") || "100", 10);
+  const offset = parseInt(searchParams.get("offset") || "0", 10);
+
+  // Sorting
+  const sortBy = searchParams.get("sortBy") || "createdAt";
+  const sortOrder = (searchParams.get("sortOrder") || "desc") as "asc" | "desc";
+
+  // Build where clause
+  const where: Prisma.LeadWhereInput = {};
+
+  if (stage) {
+    where.stage = stage;
+  }
+
+  if (minScore) {
+    where.matchScore = { ...where.matchScore as object, gte: parseInt(minScore, 10) };
+  }
+
+  if (maxScore) {
+    where.matchScore = { ...where.matchScore as object, lte: parseInt(maxScore, 10) };
+  }
+
+  if (client) {
+    where.client = { contains: client };
+  }
+
+  if (technology) {
+    where.requiredTechnologies = { contains: technology };
+  }
+
+  if (autoFiltered !== null && autoFiltered !== undefined && autoFiltered !== "") {
+    where.autoFiltered = autoFiltered === "true";
+  }
+
+  if (source) {
+    where.source = source;
+  }
+
+  // Valid sort fields
+  const validSortFields = [
+    "createdAt",
+    "updatedAt",
+    "matchScore",
+    "client",
+    "title",
+    "stage",
+    "offeredRate",
+  ];
+  const actualSortBy = validSortFields.includes(sortBy) ? sortBy : "createdAt";
+
+  // Get total count for pagination metadata
+  const total = await prisma.lead.findMany({ where }).then((leads) => leads.length);
+
+  // Fetch leads
   const leads = await prisma.lead.findMany({
-    orderBy: [
-      { stage: "asc" },
-      { matchScore: "desc" },
-      { createdAt: "desc" },
-    ],
+    where,
+    orderBy: { [actualSortBy]: sortOrder },
+    take: limit,
+    skip: offset,
   });
-  return NextResponse.json(leads);
+
+  return NextResponse.json({
+    data: leads,
+    pagination: {
+      total,
+      limit,
+      offset,
+      hasMore: offset + leads.length < total,
+    },
+  });
 }
 
 // POST - Create a new lead
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authResult = await optionalAuth(request.headers.get("Authorization"));
+  if (!authResult.authenticated) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
+  }
+
   const data = await request.json();
 
   // Get the profile for matching

@@ -41,6 +41,7 @@ model Profile {
   // Relations
   missions Mission[]
   leads    Lead[]
+  apiKeys  ApiKey[]
 }
 
 // =============================================================================
@@ -143,4 +144,25 @@ model Document {
   // Relations
   leadId String
   lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================================
+// API KEY - For external API access
+// =============================================================================
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name        String    // User-friendly name for the key
+  keyHash     String    @unique  // SHA-256 hash of the actual key
+  keyPrefix   String    // First 8 chars for identification (e.g., "opp_abc1...")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?  // Optional expiration
+  revoked     Boolean   @default(false)
+
+  // Relations
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }

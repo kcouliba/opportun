@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateMatchScore } from "@/lib/matching";
+import { optionalAuth } from "@/lib/auth";
 
 // GET - Fetch a single lead
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await optionalAuth(request.headers.get("Authorization"));
+  if (!authResult.authenticated) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const lead = await prisma.lead.findUnique({
@@ -23,9 +29,14 @@ export async function GET(
 
 // PUT - Update a lead
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await optionalAuth(request.headers.get("Authorization"));
+  if (!authResult.authenticated) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
+  }
+
   const { id } = await params;
   const data = await request.json();
 
@@ -90,9 +101,14 @@ export async function PUT(
 
 // DELETE - Delete a lead
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await optionalAuth(request.headers.get("Authorization"));
+  if (!authResult.authenticated) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
+  }
+
   const { id } = await params;
 
   await prisma.lead.delete({ where: { id } });
