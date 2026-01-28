@@ -5,10 +5,133 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
 
+// Common technology keywords to detect
+const TECH_KEYWORDS = [
+  // Frontend
+  "React", "Vue", "Angular", "Next.js", "Nuxt", "Svelte", "TypeScript", "JavaScript",
+  "HTML", "CSS", "Tailwind", "SASS", "SCSS", "Redux", "Zustand", "GraphQL",
+  // Backend
+  "Node.js", "Node", "Express", "NestJS", "Python", "Django", "FastAPI", "Flask",
+  "Java", "Spring", "Spring Boot", "Kotlin", "Go", "Golang", "Rust", "Ruby", "Rails",
+  "PHP", "Laravel", "Symfony", ".NET", "C#",
+  // Data
+  "PostgreSQL", "Postgres", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Kafka",
+  "RabbitMQ", "SQL", "NoSQL", "DynamoDB", "Cassandra",
+  // Cloud & DevOps
+  "AWS", "Azure", "GCP", "Google Cloud", "Docker", "Kubernetes", "K8s", "Terraform",
+  "CI/CD", "Jenkins", "GitLab", "GitHub Actions", "Ansible", "Linux",
+  // Mobile
+  "React Native", "Flutter", "iOS", "Android", "Swift", "Objective-C",
+  // AI/ML
+  "Machine Learning", "ML", "AI", "TensorFlow", "PyTorch", "LLM", "NLP",
+];
+
+// French cities and remote keywords
+const LOCATIONS = [
+  "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes", "Strasbourg",
+  "Montpellier", "Bordeaux", "Lille", "Rennes", "Reims", "Le Havre", "Grenoble",
+  "Ile-de-France", "IDF", "La Défense",
+];
+
+interface ParsedData {
+  technologies: string[];
+  rate: string | null;
+  location: string | null;
+  remotePolicy: string | null;
+}
+
+interface AutoFilledFields {
+  technologies: boolean;
+  rate: boolean;
+  location: boolean;
+  remotePolicy: boolean;
+}
+
+function parseJobDescription(text: string): ParsedData {
+  const result: ParsedData = {
+    technologies: [],
+    rate: null,
+    location: null,
+    remotePolicy: null,
+  };
+
+  const textLower = text.toLowerCase();
+
+  // Extract technologies (case-insensitive matching)
+  const foundTechs = new Set<string>();
+  for (const tech of TECH_KEYWORDS) {
+    // Create a regex that matches the tech as a whole word
+    const regex = new RegExp(`\\b${tech.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    if (regex.test(text)) {
+      foundTechs.add(tech);
+    }
+  }
+  result.technologies = Array.from(foundTechs);
+
+  // Extract rate patterns
+  // Patterns: "€600/day", "600€/jour", "TJM 600", "600-700€", "TJM: 600€", etc.
+  const ratePatterns = [
+    /(\d{3,4})\s*[-–]\s*(\d{3,4})\s*€/i, // 600-700€
+    /€\s*(\d{3,4})\s*[-–]\s*(\d{3,4})/i, // €600-700
+    /(\d{3,4})\s*€\s*[/\\]?\s*(jour|day|j)/i, // 600€/jour
+    /€\s*(\d{3,4})\s*[/\\]?\s*(jour|day|j)/i, // €600/jour
+    /tjm\s*:?\s*(\d{3,4})/i, // TJM 600 or TJM: 600
+    /(\d{3,4})\s*€/i, // Simple 600€
+    /€\s*(\d{3,4})/i, // Simple €600
+  ];
+
+  for (const pattern of ratePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      // Check if it's a range pattern
+      if (match[2] && /^\d+$/.test(match[2])) {
+        result.rate = `${match[1]}-${match[2]}€/day`;
+      } else if (match[1]) {
+        result.rate = `${match[1]}€/day`;
+      }
+      break;
+    }
+  }
+
+  // Extract location
+  for (const location of LOCATIONS) {
+    const regex = new RegExp(`\\b${location}\\b`, "i");
+    if (regex.test(text)) {
+      result.location = location;
+      break;
+    }
+  }
+
+  // Extract remote policy
+  if (/\b(full\s*remote|100%?\s*remote|télétravail\s*(complet|total|100%?))\b/i.test(textLower)) {
+    result.remotePolicy = "full-remote";
+  } else if (/\b(remote|télétravail)\b/i.test(textLower) && !/\b(no\s*remote|pas\s*de\s*télétravail)\b/i.test(textLower)) {
+    // Check for hybrid indicators
+    if (/\b(hybrid|hybride|partiel|2j|3j|2\s*jours?|3\s*jours?)\b/i.test(textLower)) {
+      result.remotePolicy = "hybrid";
+    } else {
+      result.remotePolicy = "remote";
+    }
+  } else if (/\b(on[\s-]?site|présentiel|sur\s*site|bureau)\b/i.test(textLower)) {
+    result.remotePolicy = "on-site";
+  } else if (/\b(hybrid|hybride)\b/i.test(textLower)) {
+    result.remotePolicy = "hybrid";
+  }
+
+  return result;
+}
+
 export default function QuickCapturePage() {
   const router = useRouter();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [jobDescription, setJobDescription] = useState("");
+  const [autoFilled, setAutoFilled] = useState<AutoFilledFields>({
+    technologies: false,
+    rate: false,
+    location: false,
+    remotePolicy: false,
+  });
 
   // Get tomorrow's date as default for follow-up
   const tomorrow = new Date();
@@ -22,7 +145,55 @@ export default function QuickCapturePage() {
     source: "recruiter",
     nextActionDate: tomorrowStr,
     notes: "",
+    technologies: [] as string[],
+    rate: "",
+    location: "",
+    remotePolicy: "",
   });
+
+  const handleParse = () => {
+    if (!jobDescription.trim()) {
+      showToast("Paste a job description first", "error");
+      return;
+    }
+
+    const parsed = parseJobDescription(jobDescription);
+    const newAutoFilled: AutoFilledFields = {
+      technologies: false,
+      rate: false,
+      location: false,
+      remotePolicy: false,
+    };
+
+    const updates: Partial<typeof form> = {};
+
+    if (parsed.technologies.length > 0) {
+      updates.technologies = parsed.technologies;
+      newAutoFilled.technologies = true;
+    }
+    if (parsed.rate) {
+      updates.rate = parsed.rate;
+      newAutoFilled.rate = true;
+    }
+    if (parsed.location) {
+      updates.location = parsed.location;
+      newAutoFilled.location = true;
+    }
+    if (parsed.remotePolicy) {
+      updates.remotePolicy = parsed.remotePolicy;
+      newAutoFilled.remotePolicy = true;
+    }
+
+    setForm((prev) => ({ ...prev, ...updates }));
+    setAutoFilled(newAutoFilled);
+
+    const count = Object.values(newAutoFilled).filter(Boolean).length;
+    if (count > 0) {
+      showToast(`Extracted ${count} field${count > 1 ? "s" : ""} from description`, "success");
+    } else {
+      showToast("No fields could be extracted", "info");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,8 +215,11 @@ export default function QuickCapturePage() {
       nextAction: "Follow up",
       nextActionDate: form.nextActionDate || null,
       notes: form.notes || null,
-      requiredTechnologies: "[]",
+      requiredTechnologies: JSON.stringify(form.technologies),
       requiredDomains: "[]",
+      offeredRate: form.rate || null,
+      location: form.location || null,
+      remotePolicy: form.remotePolicy || null,
     };
 
     try {
@@ -65,6 +239,17 @@ export default function QuickCapturePage() {
           source: "recruiter",
           nextActionDate: tomorrowStr,
           notes: "",
+          technologies: [],
+          rate: "",
+          location: "",
+          remotePolicy: "",
+        });
+        setJobDescription("");
+        setAutoFilled({
+          technologies: false,
+          rate: false,
+          location: false,
+          remotePolicy: false,
         });
       } else {
         const error = await res.json();
@@ -94,8 +279,11 @@ export default function QuickCapturePage() {
       nextAction: "Follow up",
       nextActionDate: form.nextActionDate || null,
       notes: form.notes || null,
-      requiredTechnologies: "[]",
+      requiredTechnologies: JSON.stringify(form.technologies),
       requiredDomains: "[]",
+      offeredRate: form.rate || null,
+      location: form.location || null,
+      remotePolicy: form.remotePolicy || null,
     };
 
     try {
@@ -136,6 +324,27 @@ export default function QuickCapturePage() {
             Capture now, details later
           </p>
         </header>
+
+        {/* Job Description Parser */}
+        <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Paste Job Description
+          </label>
+          <textarea
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] text-sm"
+            placeholder="Paste the job description here to auto-extract technologies, rate, location..."
+            rows={4}
+          />
+          <button
+            type="button"
+            onClick={handleParse}
+            className="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+          >
+            Parse Description
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Client - Most important */}
@@ -213,6 +422,113 @@ export default function QuickCapturePage() {
               />
             </div>
           </div>
+
+          {/* Parsed Fields Section */}
+          {(form.technologies.length > 0 || form.rate || form.location || form.remotePolicy) && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                Extracted from description (review and edit)
+              </p>
+
+              {/* Technologies */}
+              {form.technologies.length > 0 && (
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Technologies
+                    {autoFilled.technologies && (
+                      <span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
+                        auto
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {form.technologies.map((tech) => (
+                      <span
+                        key={tech}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-sm"
+                      >
+                        {tech}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              technologies: prev.technologies.filter((t) => t !== tech),
+                            }))
+                          }
+                          className="text-gray-400 hover:text-red-500 text-xs"
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Rate, Location, Remote in a grid */}
+              <div className="grid grid-cols-3 gap-2">
+                {form.rate && (
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Rate
+                      {autoFilled.rate && (
+                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
+                          auto
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={form.rate}
+                      onChange={(e) => setForm({ ...form, rate: e.target.value })}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                {form.location && (
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Location
+                      {autoFilled.location && (
+                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
+                          auto
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={form.location}
+                      onChange={(e) => setForm({ ...form, location: e.target.value })}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                {form.remotePolicy && (
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Remote
+                      {autoFilled.remotePolicy && (
+                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
+                          auto
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={form.remotePolicy}
+                      onChange={(e) => setForm({ ...form, remotePolicy: e.target.value })}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="full-remote">Full Remote</option>
+                      <option value="remote">Remote</option>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="on-site">On-site</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Quick notes */}
           <div>

@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
 
+  // Full-text search
+  const q = searchParams.get("q");
+
   // Filtering
   const stage = searchParams.get("stage");
   const minScore = searchParams.get("minScore");
@@ -76,16 +79,46 @@ export async function GET(request: NextRequest) {
   ];
   const actualSortBy = validSortFields.includes(sortBy) ? sortBy : "createdAt";
 
-  // Get total count for pagination metadata
-  const total = await prisma.lead.findMany({ where }).then((leads) => leads.length);
+  // Helper function for case-insensitive search filtering
+  const matchesSearch = (lead: {
+    client: string;
+    title: string;
+    description: string | null;
+    notes: string | null;
+    contactName: string | null;
+    contactInfo: string | null;
+  }, searchTerm: string): boolean => {
+    const term = searchTerm.toLowerCase();
+    const searchFields = [
+      lead.client,
+      lead.title,
+      lead.description,
+      lead.notes,
+      lead.contactName,
+      lead.contactInfo,
+    ];
+    return searchFields.some(
+      (field) => field && field.toLowerCase().includes(term)
+    );
+  };
 
-  // Fetch leads
-  const leads = await prisma.lead.findMany({
+  // Fetch all leads matching the where clause first
+  let allLeads = await prisma.lead.findMany({
     where,
     orderBy: { [actualSortBy]: sortOrder },
-    take: limit,
-    skip: offset,
   });
+
+  // Apply full-text search filter in memory for case-insensitive matching
+  // (SQLite's contains is case-sensitive)
+  if (q) {
+    allLeads = allLeads.filter((lead) => matchesSearch(lead, q));
+  }
+
+  // Calculate total after search filtering
+  const total = allLeads.length;
+
+  // Apply pagination to filtered results
+  const leads = allLeads.slice(offset, offset + limit);
 
   return NextResponse.json({
     data: leads,

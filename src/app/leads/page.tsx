@@ -1,8 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { PageLoader } from "@/components/LoadingSpinner";
+
+// Custom hook for debouncing values
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 interface Lead {
   id: string;
@@ -27,16 +44,26 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const fetchLeads = useCallback(async (query: string) => {
+    setLoading(true);
+    try {
+      const url = query ? `/api/leads?q=${encodeURIComponent(query)}` : "/api/leads";
+      const res = await fetch(url);
+      const data = await res.json();
+      setLeads(data.data || []);
+    } catch {
+      // Keep existing leads on error
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetch("/api/leads")
-      .then((res) => res.json())
-      .then((data) => {
-        setLeads(data.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+    fetchLeads(debouncedSearch);
+  }, [debouncedSearch, fetchLeads]);
 
   const filteredLeads = filter === "all" ? leads : leads.filter((l) => l.stage === filter);
 
@@ -48,6 +75,19 @@ export default function LeadsPage() {
     lost: leads.filter((l) => l.stage === "lost").length,
   };
 
+  const handleExportCSV = () => {
+    // Build export URL with current filter
+    const params = new URLSearchParams();
+    if (filter !== "all") {
+      params.set("stage", filter);
+    }
+    const queryString = params.toString();
+    const exportUrl = `/api/leads/export${queryString ? `?${queryString}` : ""}`;
+
+    // Trigger download
+    window.location.href = exportUrl;
+  };
+
   if (loading) {
     return <PageLoader />;
   }
@@ -56,12 +96,79 @@ export default function LeadsPage() {
     <main className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Pipeline</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            {leads.length} total leads
-          </p>
+        <header className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Pipeline</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              {leads.length} total leads
+            </p>
+          </div>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            Export CSV
+          </button>
         </header>
+
+        {/* Search Input */}
+        <div className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search leads by client, title, description, notes, contact..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <svg
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+          {debouncedSearch && (
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Showing results for &quot;{debouncedSearch}&quot;
+            </p>
+          )}
+        </div>
 
         {/* Pipeline Overview */}
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
