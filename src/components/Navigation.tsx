@@ -25,7 +25,8 @@ export default function Navigation() {
     Promise.all([
       fetch("/api/missions").then((r) => r.json()),
       fetch("/api/leads").then((r) => r.json()),
-    ]).then(([missions, leads]) => {
+    ]).then(([missions, leadsResponse]) => {
+      const leads = leadsResponse.data || [];
       const activeMission = missions.find((m: { status: string }) => m.status === "active");
       const daysLeft = activeMission?.endDate
         ? Math.ceil(

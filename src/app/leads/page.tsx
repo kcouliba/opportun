@@ -32,7 +32,7 @@ export default function LeadsPage() {
     fetch("/api/leads")
       .then((res) => res.json())
       .then((data) => {
-        setLeads(data);
+        setLeads(data.data || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

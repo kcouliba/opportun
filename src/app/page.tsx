@@ -114,13 +114,17 @@ export default async function Home() {
                 value={
                   data.daysUntilEnd !== null
                     ? `${data.daysUntilEnd} days`
+                    : data.activeMission
+                    ? "Ongoing"
                     : "No mission"
                 }
                 subtitle={data.activeMission?.client || "Add your current work"}
                 href="/missions"
                 variant={
-                  data.daysUntilEnd === null
+                  !data.activeMission
                     ? "warning"
+                    : data.daysUntilEnd === null
+                    ? "success"
                     : data.daysUntilEnd <= 30
                     ? "danger"
                     : data.daysUntilEnd <= 60
