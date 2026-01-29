@@ -35,7 +35,8 @@ const LOCATIONS = [
 
 interface ParsedData {
   technologies: string[];
-  rate: string | null;
+  rate: number | null;
+  rateDisplay: string | null; // For showing the original parsed text
   location: string | null;
   remotePolicy: string | null;
 }
@@ -51,6 +52,7 @@ function parseJobDescription(text: string): ParsedData {
   const result: ParsedData = {
     technologies: [],
     rate: null,
+    rateDisplay: null,
     location: null,
     remotePolicy: null,
   };
@@ -83,11 +85,16 @@ function parseJobDescription(text: string): ParsedData {
   for (const pattern of ratePatterns) {
     const match = text.match(pattern);
     if (match) {
-      // Check if it's a range pattern
+      // Check if it's a range pattern (second capture group is also a number)
       if (match[2] && /^\d+$/.test(match[2])) {
-        result.rate = `${match[1]}-${match[2]}€/day`;
+        const low = parseInt(match[1], 10);
+        const high = parseInt(match[2], 10);
+        // Use the average of the range
+        result.rate = Math.round((low + high) / 2);
+        result.rateDisplay = `${match[1]}-${match[2]}€/day`;
       } else if (match[1]) {
-        result.rate = `${match[1]}€/day`;
+        result.rate = parseInt(match[1], 10);
+        result.rateDisplay = `${match[1]}€/day`;
       }
       break;
     }
@@ -146,7 +153,8 @@ export default function QuickCapturePage() {
     nextActionDate: tomorrowStr,
     notes: "",
     technologies: [] as string[],
-    rate: "",
+    rate: null as number | null,
+    rateDisplay: "", // For showing the parsed rate in UI
     location: "",
     remotePolicy: "",
   });
@@ -171,8 +179,9 @@ export default function QuickCapturePage() {
       updates.technologies = parsed.technologies;
       newAutoFilled.technologies = true;
     }
-    if (parsed.rate) {
+    if (parsed.rate !== null) {
       updates.rate = parsed.rate;
+      updates.rateDisplay = parsed.rateDisplay || `${parsed.rate}€/day`;
       newAutoFilled.rate = true;
     }
     if (parsed.location) {
@@ -240,7 +249,8 @@ export default function QuickCapturePage() {
           nextActionDate: tomorrowStr,
           notes: "",
           technologies: [],
-          rate: "",
+          rate: null,
+          rateDisplay: "",
           location: "",
           remotePolicy: "",
         });
@@ -424,7 +434,7 @@ export default function QuickCapturePage() {
           </div>
 
           {/* Parsed Fields Section */}
-          {(form.technologies.length > 0 || form.rate || form.location || form.remotePolicy) && (
+          {(form.technologies.length > 0 || form.rate !== null || form.location || form.remotePolicy) && (
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
               <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
                 Extracted from description (review and edit)
@@ -468,10 +478,10 @@ export default function QuickCapturePage() {
 
               {/* Rate, Location, Remote in a grid */}
               <div className="grid grid-cols-3 gap-2">
-                {form.rate && (
+                {form.rate !== null && (
                   <div>
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Rate
+                      Rate (€/day)
                       {autoFilled.rate && (
                         <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
                           auto
@@ -479,11 +489,15 @@ export default function QuickCapturePage() {
                       )}
                     </label>
                     <input
-                      type="text"
+                      type="number"
                       value={form.rate}
-                      onChange={(e) => setForm({ ...form, rate: e.target.value })}
+                      onChange={(e) => setForm({ ...form, rate: e.target.value ? parseInt(e.target.value, 10) : null })}
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., 600"
                     />
+                    {form.rateDisplay && form.rateDisplay !== `${form.rate}€/day` && (
+                      <p className="text-[10px] text-gray-500 mt-0.5">Parsed: {form.rateDisplay}</p>
+                    )}
                   </div>
                 )}
                 {form.location && (
