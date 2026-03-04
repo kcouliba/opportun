@@ -19,9 +19,7 @@ fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<Document> {
 struct LeadData {
     client: String,
     title: String,
-    description: Option<String>,
     required_technologies: Option<String>,
-    required_domains: Option<String>,
     remote_policy: Option<String>,
     offered_rate: Option<i64>,
     estimated_start_date: Option<String>,
@@ -265,9 +263,7 @@ pub fn generate_document(
                 Ok(LeadData {
                     client: row.get("client")?,
                     title: row.get("title")?,
-                    description: row.get("description")?,
                     required_technologies: row.get("requiredTechnologies")?,
-                    required_domains: row.get("requiredDomains")?,
                     remote_policy: row.get("remotePolicy")?,
                     offered_rate: row.get("offeredRate")?,
                     estimated_start_date: row.get("estimatedStartDate")?,

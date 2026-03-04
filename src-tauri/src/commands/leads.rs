@@ -7,6 +7,18 @@ use crate::models::{
 use chrono::Utc;
 use tauri::State;
 
+/// Profile fields needed for match score calculation
+struct ProfileForMatching {
+    id: String,
+    technologies: Option<String>,
+    domains: Option<String>,
+    minimum_tjm: Option<i64>,
+    target_tjm: Option<i64>,
+    preferred_locations: Option<String>,
+    blacklisted_clients: Option<String>,
+    blacklisted_domains: Option<String>,
+}
+
 fn row_to_lead(row: &rusqlite::Row) -> rusqlite::Result<Lead> {
     Ok(Lead {
         id: row.get("id")?,
@@ -90,7 +102,7 @@ fn matches_search(lead: &Lead, term: &str) -> bool {
     ];
     fields
         .iter()
-        .any(|f| f.map_or(false, |v| v.to_lowercase().contains(&term_lower)))
+        .any(|f| f.is_some_and(|v| v.to_lowercase().contains(&term_lower)))
 }
 
 /// Escape a value for CSV output
@@ -285,31 +297,18 @@ pub fn create_lead(db: State<Database>, data: LeadInput) -> Result<Lead, String>
 
     // Get profile (required)
     let profile = conn
-        .query_row(
-            "SELECT * FROM \"Profile\" LIMIT 1",
-            [],
-            |row| -> rusqlite::Result<(
-                String,
-                Option<String>,
-                Option<String>,
-                Option<i64>,
-                Option<i64>,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-            )> {
-                Ok((
-                    row.get("id")?,
-                    row.get("technologies")?,
-                    row.get("domains")?,
-                    row.get("minimumTJM")?,
-                    row.get("targetTJM")?,
-                    row.get("preferredLocations")?,
-                    row.get("blacklistedClients")?,
-                    row.get("blacklistedDomains")?,
-                ))
-            },
-        )
+        .query_row("SELECT * FROM \"Profile\" LIMIT 1", [], |row| {
+            Ok(ProfileForMatching {
+                id: row.get("id")?,
+                technologies: row.get("technologies")?,
+                domains: row.get("domains")?,
+                minimum_tjm: row.get("minimumTJM")?,
+                target_tjm: row.get("targetTJM")?,
+                preferred_locations: row.get("preferredLocations")?,
+                blacklisted_clients: row.get("blacklistedClients")?,
+                blacklisted_domains: row.get("blacklistedDomains")?,
+            })
+        })
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => {
                 "No profile found. Please set up your profile first.".to_string()
@@ -317,26 +316,15 @@ pub fn create_lead(db: State<Database>, data: LeadInput) -> Result<Lead, String>
             _ => e.to_string(),
         })?;
 
-    let (
-        profile_id,
-        profile_technologies,
-        profile_domains,
-        minimum_tjm,
-        target_tjm,
-        preferred_locations,
-        blacklisted_clients,
-        blacklisted_domains,
-    ) = profile;
-
     // Build match data
     let profile_match = ProfileMatchData {
-        technologies: parse_json_array(&profile_technologies),
-        domains: parse_json_array(&profile_domains),
-        minimum_tjm,
-        target_tjm,
-        preferred_locations: parse_json_array(&preferred_locations),
-        blacklisted_clients: parse_json_array(&blacklisted_clients),
-        blacklisted_domains: parse_json_array(&blacklisted_domains),
+        technologies: parse_json_array(&profile.technologies),
+        domains: parse_json_array(&profile.domains),
+        minimum_tjm: profile.minimum_tjm,
+        target_tjm: profile.target_tjm,
+        preferred_locations: parse_json_array(&profile.preferred_locations),
+        blacklisted_clients: parse_json_array(&profile.blacklisted_clients),
+        blacklisted_domains: parse_json_array(&profile.blacklisted_domains),
     };
 
     let lead_match = LeadMatchData {
@@ -399,7 +387,7 @@ pub fn create_lead(db: State<Database>, data: LeadInput) -> Result<Lead, String>
             data.contact_info,
             data.next_action,
             data.next_action_date,
-            profile_id,
+            profile.id,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -430,48 +418,28 @@ pub fn update_lead(db: State<Database>, id: String, data: LeadInput) -> Result<L
         })?;
 
     // Get profile for recalculating match score
-    let profile = conn.query_row(
-        "SELECT * FROM \"Profile\" LIMIT 1",
-        [],
-        |row| -> rusqlite::Result<(
-            Option<String>,
-            Option<String>,
-            Option<i64>,
-            Option<i64>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )> {
-            Ok((
-                row.get("technologies")?,
-                row.get("domains")?,
-                row.get("minimumTJM")?,
-                row.get("targetTJM")?,
-                row.get("preferredLocations")?,
-                row.get("blacklistedClients")?,
-                row.get("blacklistedDomains")?,
-            ))
-        },
-    );
+    let profile = conn.query_row("SELECT * FROM \"Profile\" LIMIT 1", [], |row| {
+        Ok(ProfileForMatching {
+            id: row.get("id")?,
+            technologies: row.get("technologies")?,
+            domains: row.get("domains")?,
+            minimum_tjm: row.get("minimumTJM")?,
+            target_tjm: row.get("targetTJM")?,
+            preferred_locations: row.get("preferredLocations")?,
+            blacklisted_clients: row.get("blacklistedClients")?,
+            blacklisted_domains: row.get("blacklistedDomains")?,
+        })
+    });
 
-    let (match_score, auto_filtered) = if let Ok((
-        technologies,
-        domains,
-        minimum_tjm,
-        target_tjm,
-        preferred_locations,
-        blacklisted_clients,
-        blacklisted_domains,
-    )) = profile
-    {
+    let (match_score, auto_filtered) = if let Ok(p) = profile {
         let profile_match = ProfileMatchData {
-            technologies: parse_json_array(&technologies),
-            domains: parse_json_array(&domains),
-            minimum_tjm,
-            target_tjm,
-            preferred_locations: parse_json_array(&preferred_locations),
-            blacklisted_clients: parse_json_array(&blacklisted_clients),
-            blacklisted_domains: parse_json_array(&blacklisted_domains),
+            technologies: parse_json_array(&p.technologies),
+            domains: parse_json_array(&p.domains),
+            minimum_tjm: p.minimum_tjm,
+            target_tjm: p.target_tjm,
+            preferred_locations: parse_json_array(&p.preferred_locations),
+            blacklisted_clients: parse_json_array(&p.blacklisted_clients),
+            blacklisted_domains: parse_json_array(&p.blacklisted_domains),
         };
 
         let lead_match = LeadMatchData {

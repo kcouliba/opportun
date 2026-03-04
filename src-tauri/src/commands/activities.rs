@@ -150,7 +150,7 @@ pub fn list_lead_activities(db: State<Database>, lead_id: String) -> Result<Vec<
         .prepare("SELECT * FROM Activity WHERE leadId = ?1 ORDER BY occurredAt DESC")
         .map_err(|e| e.to_string())?;
     let activities = stmt
-        .query_map(rusqlite::params![lead_id], |row| row_to_activity(row))
+        .query_map(rusqlite::params![lead_id], row_to_activity)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -213,7 +213,7 @@ pub fn create_activity(
     let mut stmt = conn
         .prepare("SELECT * FROM Activity WHERE id = ?1")
         .map_err(|e| e.to_string())?;
-    stmt.query_row(rusqlite::params![id], |row| row_to_activity(row))
+    stmt.query_row(rusqlite::params![id], row_to_activity)
         .map_err(|e| format!("Failed to create activity: {}", e))
 }
 
@@ -269,7 +269,7 @@ pub fn update_activity(
     let mut stmt = conn
         .prepare("SELECT * FROM Activity WHERE id = ?1")
         .map_err(|e| e.to_string())?;
-    stmt.query_row(rusqlite::params![id], |row| row_to_activity(row))
+    stmt.query_row(rusqlite::params![id], row_to_activity)
         .map_err(|e| format!("Failed to retrieve updated activity: {}", e))
 }
 

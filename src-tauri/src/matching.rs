@@ -1,10 +1,8 @@
 /// Calculate match score between a lead and a profile
-/// Returns (score, reasons, auto_filtered)
 pub fn calculate_match_score(
     profile: &ProfileMatchData,
     lead: &LeadMatchData,
 ) -> MatchResult {
-    let mut reasons: Vec<String> = Vec::new();
     let mut score: i64 = 50; // Base score
 
     // Check blacklist - automatic filter
@@ -15,10 +13,8 @@ pub fn calculate_match_score(
             .iter()
             .any(|c| client_lower.contains(&c.to_lowercase()))
         {
-            reasons.push("Client is blacklisted".to_string());
             return MatchResult {
                 score: 0,
-                reasons,
                 auto_filtered: true,
             };
         }
@@ -32,10 +28,8 @@ pub fn calculate_match_score(
                 .any(|bd| d.to_lowercase().contains(&bd.to_lowercase()))
         });
         if has_blacklisted {
-            reasons.push("Domain is blacklisted".to_string());
             return MatchResult {
                 score: 0,
-                reasons,
                 auto_filtered: true,
             };
         }
@@ -44,13 +38,8 @@ pub fn calculate_match_score(
     // Check minimum rate - automatic filter
     if let (Some(min_tjm), Some(offered)) = (profile.minimum_tjm, lead.offered_rate) {
         if offered < min_tjm {
-            reasons.push(format!(
-                "Rate ({}€) below minimum ({}€)",
-                offered, min_tjm
-            ));
             return MatchResult {
                 score: 0,
-                reasons,
                 auto_filtered: true,
             };
         }
@@ -63,29 +52,15 @@ pub fn calculate_match_score(
             .iter()
             .map(|t| t.to_lowercase())
             .collect();
-        let matching_techs: Vec<&String> = lead
+        let matching_count = lead
             .required_technologies
             .iter()
             .filter(|t| profile_tech_lower.contains(&t.to_lowercase()))
-            .collect();
+            .count();
         let tech_match_ratio =
-            matching_techs.len() as f64 / lead.required_technologies.len() as f64;
+            matching_count as f64 / lead.required_technologies.len() as f64;
         let tech_points = (tech_match_ratio * 30.0).round() as i64;
         score += tech_points;
-
-        if !matching_techs.is_empty() {
-            let names: Vec<&str> = matching_techs.iter().map(|s| s.as_str()).collect();
-            reasons.push(format!("Tech match: {}", names.join(", ")));
-        }
-        if tech_match_ratio < 0.5 {
-            let missing: Vec<&String> = lead
-                .required_technologies
-                .iter()
-                .filter(|t| !profile_tech_lower.contains(&t.to_lowercase()))
-                .collect();
-            let names: Vec<&str> = missing.iter().map(|s| s.as_str()).collect();
-            reasons.push(format!("Missing: {}", names.join(", ")));
-        }
     }
 
     // Domain match (up to +15 points)
@@ -95,15 +70,12 @@ pub fn calculate_match_score(
             .iter()
             .map(|d| d.to_lowercase())
             .collect();
-        let matching_domains: Vec<&String> = lead
+        let has_match = lead
             .required_domains
             .iter()
-            .filter(|d| profile_domain_lower.contains(&d.to_lowercase()))
-            .collect();
-        if !matching_domains.is_empty() {
+            .any(|d| profile_domain_lower.contains(&d.to_lowercase()));
+        if has_match {
             score += 15;
-            let names: Vec<&str> = matching_domains.iter().map(|s| s.as_str()).collect();
-            reasons.push(format!("Domain match: {}", names.join(", ")));
         }
     }
 
@@ -111,11 +83,9 @@ pub fn calculate_match_score(
     if let (Some(target), Some(offered)) = (profile.target_tjm, lead.offered_rate) {
         if offered >= target {
             score += 10;
-            reasons.push("Rate meets target".to_string());
         } else if let Some(min) = profile.minimum_tjm {
             if offered >= min {
                 score += 5;
-                reasons.push("Rate acceptable but below target".to_string());
             }
         }
     }
@@ -129,17 +99,15 @@ pub fn calculate_match_score(
             });
             if location_match {
                 score += 10;
-                reasons.push("Location matches preference".to_string());
             }
         }
     }
 
     // Cap score at 100
-    score = score.min(100).max(0);
+    score = score.clamp(0, 100);
 
     MatchResult {
         score,
-        reasons,
         auto_filtered: false,
     }
 }
@@ -164,7 +132,6 @@ pub struct LeadMatchData {
 
 pub struct MatchResult {
     pub score: i64,
-    pub reasons: Vec<String>,
     pub auto_filtered: bool,
 }
 
@@ -233,7 +200,8 @@ mod tests {
         lead.offered_rate = Some(700);
         let result = calculate_match_score(&base_profile(), &lead);
         assert!(!result.auto_filtered);
-        assert!(result.reasons.contains(&"Rate meets target".to_string()));
+        // Rate meets target = +10, so score should be higher than base lead (600 = +5)
+        assert!(result.score > 80);
     }
 
     #[test]

@@ -26,7 +26,7 @@ pub fn list_missions(db: State<Database>) -> Result<Vec<Mission>, String> {
         .prepare("SELECT * FROM Mission ORDER BY status ASC, startDate DESC")
         .map_err(|e| e.to_string())?;
     let missions = stmt
-        .query_map([], |row| row_to_mission(row))
+        .query_map([], row_to_mission)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -39,7 +39,7 @@ pub fn get_mission(db: State<Database>, id: String) -> Result<Mission, String> {
     let mut stmt = conn
         .prepare("SELECT * FROM Mission WHERE id = ?1")
         .map_err(|e| e.to_string())?;
-    stmt.query_row(rusqlite::params![id], |row| row_to_mission(row))
+    stmt.query_row(rusqlite::params![id], row_to_mission)
         .map_err(|e| format!("Mission not found: {}", e))
 }
 
@@ -81,7 +81,7 @@ pub fn create_mission(db: State<Database>, data: MissionInput) -> Result<Mission
     let mut stmt = conn
         .prepare("SELECT * FROM Mission WHERE id = ?1")
         .map_err(|e| e.to_string())?;
-    stmt.query_row(rusqlite::params![id], |row| row_to_mission(row))
+    stmt.query_row(rusqlite::params![id], row_to_mission)
         .map_err(|e| format!("Failed to create mission: {}", e))
 }
 
@@ -132,7 +132,7 @@ pub fn update_mission(
     let mut stmt = conn
         .prepare("SELECT * FROM Mission WHERE id = ?1")
         .map_err(|e| e.to_string())?;
-    stmt.query_row(rusqlite::params![id], |row| row_to_mission(row))
+    stmt.query_row(rusqlite::params![id], row_to_mission)
         .map_err(|e| format!("Failed to retrieve updated mission: {}", e))
 }
 

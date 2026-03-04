@@ -1,19 +1,38 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import js from "@eslint/js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("eslint:recommended"),
+export default [
+  js.configs.recommended,
   {
     ignores: ["src-tauri/", "dist/"],
   },
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: (await import("@typescript-eslint/parser")).default,
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+        sourceType: "module",
+      },
+      globals: {
+        console: "readonly",
+        document: "readonly",
+        window: "readonly",
+        navigator: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        HTMLElement: "readonly",
+        React: "readonly",
+        process: "readonly",
+        crypto: "readonly",
+        __dirname: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": "off",
+    },
+  },
 ];
-
-export default eslintConfig;

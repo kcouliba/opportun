@@ -108,7 +108,6 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     fetchActivities(0, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeFilter, fromDate, toDate]);
 
   const handleLoadMore = () => {
