@@ -10,7 +10,10 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals"),
+  ...compat.extends("eslint:recommended"),
+  {
+    ignores: ["src-tauri/", "dist/"],
+  },
 ];
 
 export default eslintConfig;

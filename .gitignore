@@ -2,13 +2,12 @@
 node_modules
 .pnpm-store
 
-# Next.js
-.next
-out
-
-# Production
-build
+# Build
 dist
+build
+
+# Tauri
+src-tauri/target/
 
 # Environment
 .env
@@ -32,7 +31,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Prisma
+# Prisma (kept for reference/migration)
 prisma/*.db
 prisma/*.db-journal
 
@@ -41,4 +40,3 @@ coverage
 
 # Misc
 *.tsbuildinfo
-next-env.d.ts

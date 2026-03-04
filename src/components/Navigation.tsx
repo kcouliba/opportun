@@ -1,8 +1,6 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface DashboardStats {
   missionDaysLeft: number | null;
@@ -12,7 +10,8 @@ interface DashboardStats {
 }
 
 export default function Navigation() {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
   const [stats, setStats] = useState<DashboardStats>({
     missionDaysLeft: null,
     missionClient: null,
@@ -21,13 +20,14 @@ export default function Navigation() {
   });
 
   useEffect(() => {
-    // Fetch stats for nav indicators
     Promise.all([
-      fetch("/api/missions").then((r) => r.json()),
-      fetch("/api/leads").then((r) => r.json()),
+      invoke<unknown[]>("list_missions"),
+      invoke<{ data: unknown[] }>("list_leads", { filters: {} }),
     ]).then(([missions, leadsResponse]) => {
-      const leads = leadsResponse.data || [];
-      const activeMission = missions.find((m: { status: string }) => m.status === "active");
+      const leads = (leadsResponse as { data: { stage: string }[] }).data || [];
+      const activeMission = (missions as { status: string; endDate: string | null; client: string }[]).find(
+        (m) => m.status === "active"
+      );
       const daysLeft = activeMission?.endDate
         ? Math.ceil(
             (new Date(activeMission.endDate).getTime() - Date.now()) /
@@ -48,8 +48,10 @@ export default function Navigation() {
         pipelineCount: activeLeads.length,
         qualifiedCount: qualified.length,
       });
+    }).catch(() => {
+      // Silently fail if backend isn't ready yet
     });
-  }, [pathname]); // Refresh when route changes
+  }, [pathname]);
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -71,15 +73,15 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16">
           {/* Logo + Main Nav */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="font-bold text-xl">
+            <Link to="/" className="font-bold text-xl">
               Opportun
             </Link>
 
             <div className="hidden md:flex items-center gap-1">
-              <NavLink href="/" active={isActive("/") && pathname === "/"}>
+              <NavLink to="/" active={isActive("/") && pathname === "/"}>
                 Dashboard
               </NavLink>
-              <NavLink href="/leads" active={isActive("/leads")}>
+              <NavLink to="/leads" active={isActive("/leads")}>
                 Pipeline
                 {stats.pipelineCount > 0 && (
                   <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full">
@@ -87,16 +89,16 @@ export default function Navigation() {
                   </span>
                 )}
               </NavLink>
-              <NavLink href="/activities" active={isActive("/activities")}>
+              <NavLink to="/activities" active={isActive("/activities")}>
                 Activity
               </NavLink>
-              <NavLink href="/missions" active={isActive("/missions")}>
+              <NavLink to="/missions" active={isActive("/missions")}>
                 Missions
               </NavLink>
-              <NavLink href="/analytics" active={isActive("/analytics")}>
+              <NavLink to="/analytics" active={isActive("/analytics")}>
                 Analytics
               </NavLink>
-              <NavLink href="/profile" active={isActive("/profile")}>
+              <NavLink to="/profile" active={isActive("/profile")}>
                 Profile
               </NavLink>
             </div>
@@ -127,7 +129,7 @@ export default function Navigation() {
 
             {/* Quick Capture - Primary Action */}
             <Link
-              href="/leads/quick"
+              to="/leads/quick"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               <PlusIcon />
@@ -138,30 +140,30 @@ export default function Navigation() {
 
         {/* Mobile Nav */}
         <div className="flex md:hidden border-t border-gray-100 dark:border-gray-800 -mx-4 px-4">
-          <MobileNavLink href="/" active={isActive("/") && pathname === "/"}>
+          <MobileNavLink to="/" active={isActive("/") && pathname === "/"}>
             <HomeIcon />
             <span>Home</span>
           </MobileNavLink>
-          <MobileNavLink href="/leads" active={isActive("/leads")}>
+          <MobileNavLink to="/leads" active={isActive("/leads")}>
             <PipelineIcon />
             <span>Pipeline</span>
             {stats.pipelineCount > 0 && (
               <span className="ml-1 text-xs text-blue-600">{stats.pipelineCount}</span>
             )}
           </MobileNavLink>
-          <MobileNavLink href="/activities" active={isActive("/activities")}>
+          <MobileNavLink to="/activities" active={isActive("/activities")}>
             <ActivityIcon />
             <span>Activity</span>
           </MobileNavLink>
-          <MobileNavLink href="/missions" active={isActive("/missions")}>
+          <MobileNavLink to="/missions" active={isActive("/missions")}>
             <BriefcaseIcon />
             <span>Missions</span>
           </MobileNavLink>
-          <MobileNavLink href="/analytics" active={isActive("/analytics")}>
+          <MobileNavLink to="/analytics" active={isActive("/analytics")}>
             <ChartIcon />
             <span>Analytics</span>
           </MobileNavLink>
-          <MobileNavLink href="/profile" active={isActive("/profile")}>
+          <MobileNavLink to="/profile" active={isActive("/profile")}>
             <UserIcon />
             <span>Profile</span>
           </MobileNavLink>
@@ -172,17 +174,17 @@ export default function Navigation() {
 }
 
 function NavLink({
-  href,
+  to,
   active,
   children,
 }: {
-  href: string;
+  to: string;
   active: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Link
-      href={href}
+      to={to}
       className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
         active
           ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -195,17 +197,17 @@ function NavLink({
 }
 
 function MobileNavLink({
-  href,
+  to,
   active,
   children,
 }: {
-  href: string;
+  to: string;
   active: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Link
-      href={href}
+      to={to}
       className={`flex-1 flex flex-col items-center gap-1 py-2 text-xs font-medium transition-colors ${
         active
           ? "text-blue-600 dark:text-blue-400"
