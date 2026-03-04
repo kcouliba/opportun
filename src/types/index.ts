@@ -156,3 +156,78 @@ export interface FollowUpLead extends Lead {
   isToday: boolean;
   daysUntil: number;
 }
+
+// AI types
+export interface AiSettings {
+  id: string;
+  enabled: boolean;
+  modelName: string;
+  ollamaUrl: string;
+  temperature: number;
+  maxTokens: number;
+}
+
+export interface AiSettingsInput {
+  enabled?: boolean;
+  modelName?: string;
+  ollamaUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface ParsedJobDescription {
+  title: string | null;
+  client: string | null;
+  technologies: string[] | null;
+  rate: number | null;
+  location: string | null;
+  remotePolicy: string | null;
+  description: string | null;
+  requirements: string[] | null;
+  domains: string[] | null;
+  startDate: string | null;
+  duration: string | null;
+  contactName: string | null;
+  contactInfo: string | null;
+}
+
+export interface LeadAnalysis {
+  overallFit: string;
+  fitSummary: string;
+  strengths: string[];
+  risks: string[];
+  talkingPoints: string[];
+  questions: string[];
+  rateAdvice: string | null;
+}
+
+export interface InterviewPrepQuestion {
+  question: string;
+  suggestedAnswer: string;
+  tips: string;
+}
+
+export interface InterviewPrep {
+  opening: string;
+  technicalQuestions: InterviewPrepQuestion[];
+  behavioralQuestions: string[];
+  rateNegotiation: {
+    strategy: string;
+    talkingPoints: string[];
+  };
+  questionsToAsk: { question: string; why: string }[];
+  redFlags: string[];
+  closingAdvice: string;
+}
+
+export interface DownloadProgress {
+  status: string;
+  completed: number | null;
+  total: number | null;
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  available: boolean;
+  modelName: string;
+}

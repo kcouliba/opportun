@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
+import { useAiSettings } from "@/hooks/useAiSettings";
+import { useAiParse } from "@/hooks/useAiParse";
 
 // Common technology keywords to detect
 const TECH_KEYWORDS = [
@@ -46,6 +48,8 @@ interface AutoFilledFields {
   location: boolean;
   remotePolicy: boolean;
 }
+
+type ParseSource = "auto" | "ai";
 
 function parseJobDescription(text: string): ParsedData {
   const result: ParsedData = {
@@ -130,8 +134,11 @@ function parseJobDescription(text: string): ParsedData {
 export default function QuickCapturePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { isAiEnabled } = useAiSettings();
+  const { parseWithAi, parsing: aiParsing } = useAiParse();
   const [saving, setSaving] = useState(false);
   const [jobDescription, setJobDescription] = useState("");
+  const [parseSource, setParseSource] = useState<ParseSource | null>(null);
   const [autoFilled, setAutoFilled] = useState<AutoFilledFields>({
     technologies: false,
     rate: false,
@@ -158,12 +165,7 @@ export default function QuickCapturePage() {
     remotePolicy: "",
   });
 
-  const handleParse = () => {
-    if (!jobDescription.trim()) {
-      showToast("Paste a job description first", "error");
-      return;
-    }
-
+  const applyRegexParse = () => {
     const parsed = parseJobDescription(jobDescription);
     const newAutoFilled: AutoFilledFields = {
       technologies: false,
@@ -194,6 +196,7 @@ export default function QuickCapturePage() {
 
     setForm((prev) => ({ ...prev, ...updates }));
     setAutoFilled(newAutoFilled);
+    setParseSource("auto");
 
     const count = Object.values(newAutoFilled).filter(Boolean).length;
     if (count > 0) {
@@ -201,6 +204,68 @@ export default function QuickCapturePage() {
     } else {
       showToast("No fields could be extracted", "info");
     }
+  };
+
+  const handleParse = async () => {
+    if (!jobDescription.trim()) {
+      showToast("Paste a job description first", "error");
+      return;
+    }
+
+    // Try AI parsing first if enabled
+    if (isAiEnabled) {
+      const aiResult = await parseWithAi(jobDescription);
+
+      if (aiResult) {
+        const newAutoFilled: AutoFilledFields = {
+          technologies: false,
+          rate: false,
+          location: false,
+          remotePolicy: false,
+        };
+        const updates: Partial<typeof form> = {};
+
+        if (aiResult.technologies && aiResult.technologies.length > 0) {
+          updates.technologies = aiResult.technologies;
+          newAutoFilled.technologies = true;
+        }
+        if (aiResult.rate !== null) {
+          updates.rate = aiResult.rate;
+          updates.rateDisplay = `${aiResult.rate}€/day`;
+          newAutoFilled.rate = true;
+        }
+        if (aiResult.location) {
+          updates.location = aiResult.location;
+          newAutoFilled.location = true;
+        }
+        if (aiResult.remotePolicy) {
+          updates.remotePolicy = aiResult.remotePolicy;
+          newAutoFilled.remotePolicy = true;
+        }
+        if (aiResult.client) {
+          updates.client = aiResult.client;
+        }
+        if (aiResult.contactName) {
+          updates.contactName = aiResult.contactName;
+        }
+        if (aiResult.contactInfo) {
+          updates.contactInfo = aiResult.contactInfo;
+        }
+
+        setForm((prev) => ({ ...prev, ...updates }));
+        setAutoFilled(newAutoFilled);
+        setParseSource("ai");
+
+        const count = Object.values(newAutoFilled).filter(Boolean).length;
+        showToast(`AI extracted ${count} field${count > 1 ? "s" : ""}`, "success");
+        return;
+      }
+
+      // AI failed, fall back to regex
+      showToast("AI unavailable, using pattern matching", "info");
+    }
+
+    applyRegexParse();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -327,9 +392,10 @@ export default function QuickCapturePage() {
           <button
             type="button"
             onClick={handleParse}
-            className="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            disabled={aiParsing}
+            className="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
           >
-            Parse Description
+            {aiParsing ? "AI Parsing..." : isAiEnabled ? "Parse with AI" : "Parse Description"}
           </button>
         </div>
 
@@ -423,8 +489,8 @@ export default function QuickCapturePage() {
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Technologies
                     {autoFilled.technologies && (
-                      <span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
-                        auto
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
+                        {parseSource === "ai" ? "AI" : "auto"}
                       </span>
                     )}
                   </label>
@@ -460,8 +526,8 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Rate (€/day)
                       {autoFilled.rate && (
-                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
-                          auto
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
+                          {parseSource === "ai" ? "AI" : "auto"}
                         </span>
                       )}
                     </label>
@@ -482,8 +548,8 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Location
                       {autoFilled.location && (
-                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
-                          auto
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
+                          {parseSource === "ai" ? "AI" : "auto"}
                         </span>
                       )}
                     </label>
@@ -500,8 +566,8 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Remote
                       {autoFilled.remotePolicy && (
-                        <span className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
-                          auto
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
+                          {parseSource === "ai" ? "AI" : "auto"}
                         </span>
                       )}
                     </label>

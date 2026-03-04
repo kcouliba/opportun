@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
+import AiSettingsPanel from "@/components/AiSettingsPanel";
 import type { Profile } from "@/types/index";
 
 interface ProfileForm {
@@ -312,6 +313,11 @@ export default function ProfilePage() {
               </div>
               <TagList items={profile.domains} onRemove={(v) => removeFromArray("domains", v)} />
             </Field>
+          </Section>
+
+          {/* AI Settings */}
+          <Section title="AI Settings">
+            <AiSettingsPanel />
           </Section>
 
           {/* Actions */}

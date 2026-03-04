@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod llm;
 mod matching;
 mod models;
 
@@ -25,6 +26,12 @@ pub fn run() {
                 .expect("Failed to get app data directory");
             let database =
                 Database::new(app_data_dir).expect("Failed to initialize database");
+
+            // Initialize AI/LLM state
+            let ai_settings = llm::load_settings_from_db(&database);
+            let llm_state = llm::create_llm_state(ai_settings);
+            app.manage(llm_state);
+
             app.manage(database);
 
             Ok(())
@@ -61,6 +68,15 @@ pub fn run() {
             commands::documents::generate_document,
             // Analytics
             commands::analytics::get_analytics,
+            // AI
+            commands::ai::get_ai_settings,
+            commands::ai::update_ai_settings,
+            commands::ai::check_ai_status,
+            commands::ai::parse_job_ai,
+            commands::ai::analyze_lead_ai,
+            commands::ai::generate_cover_letter_ai,
+            commands::ai::generate_interview_prep_ai,
+            commands::ai::pull_ai_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

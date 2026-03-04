@@ -214,6 +214,93 @@ pub struct ActivityFilters {
     pub offset: Option<i64>,
 }
 
+// AI types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSettings {
+    pub id: String,
+    pub enabled: bool,
+    pub model_name: String,
+    pub ollama_url: String,
+    pub temperature: f64,
+    pub max_tokens: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSettingsInput {
+    pub enabled: Option<bool>,
+    pub model_name: Option<String>,
+    pub ollama_url: Option<String>,
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedJobDescription {
+    pub title: Option<String>,
+    pub client: Option<String>,
+    pub technologies: Option<Vec<String>>,
+    pub rate: Option<i64>,
+    pub location: Option<String>,
+    pub remote_policy: Option<String>,
+    pub description: Option<String>,
+    pub requirements: Option<Vec<String>>,
+    pub domains: Option<Vec<String>>,
+    pub start_date: Option<String>,
+    pub duration: Option<String>,
+    pub contact_name: Option<String>,
+    pub contact_info: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LeadAnalysis {
+    pub overall_fit: String,
+    pub fit_summary: String,
+    pub strengths: Vec<String>,
+    pub risks: Vec<String>,
+    pub talking_points: Vec<String>,
+    pub questions: Vec<String>,
+    pub rate_advice: Option<String>,
+}
+
+// Interview prep types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewPrepQuestion {
+    pub question: String,
+    pub suggested_answer: String,
+    pub tips: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RateNegotiation {
+    pub strategy: String,
+    pub talking_points: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionToAsk {
+    pub question: String,
+    pub why: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewPrep {
+    pub opening: String,
+    pub technical_questions: Vec<InterviewPrepQuestion>,
+    pub behavioral_questions: Vec<String>,
+    pub rate_negotiation: RateNegotiation,
+    pub questions_to_ask: Vec<QuestionToAsk>,
+    pub red_flags: Vec<String>,
+    pub closing_advice: String,
+}
+
 // Response types
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

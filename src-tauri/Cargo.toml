@@ -29,8 +29,17 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 hex = "0.4"
 rand = "0.9"
+tokio = { version = "1", features = ["rt", "macros"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+async-trait = "0.1"
+thiserror = "2"
+futures-util = "0.3"
 
 [dev-dependencies]
+
+[features]
+default = []
+embedded-llm = []
 
 [profile.release]
 strip = true

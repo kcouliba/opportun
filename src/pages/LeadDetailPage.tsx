@@ -6,6 +6,8 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { useAiSettings } from "@/hooks/useAiSettings";
+import LeadAnalysisCard from "@/components/LeadAnalysisCard";
 
 interface Lead {
   id: string;
@@ -74,6 +76,7 @@ export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { isAiEnabled } = useAiSettings();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -200,21 +203,40 @@ export default function LeadDetailPage() {
     setSaving(false);
   };
 
+  const docLabels: Record<string, string> = {
+    cover_letter: "Cover Letter",
+    key_questions: "Key Questions",
+    interview_prep: "Interview Prep",
+  };
+
   const generateDocument = async (type: string) => {
     if (!id) return;
     setGenerating(type);
 
     try {
-      const doc = await invoke<Document>("generate_document", {
-        leadId: id,
-        docType: type,
-      });
+      let doc: Document;
+
+      if (type === "cover_letter" && isAiEnabled) {
+        try {
+          doc = await invoke<Document>("generate_cover_letter_ai", { leadId: id });
+        } catch (aiErr) {
+          console.warn("AI cover letter failed, falling back to template:", aiErr);
+          // Fallback to template
+          doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
+        }
+      } else if (type === "interview_prep") {
+        doc = await invoke<Document>("generate_interview_prep_ai", { leadId: id });
+      } else {
+        doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
+      }
+
       if (lead) {
         setLead({ ...lead, documents: [...lead.documents, doc] });
         setActiveDoc(doc);
       }
-      showToast(`${type === "cover_letter" ? "Cover letter" : "Key questions"} generated`);
-    } catch {
+      showToast(`${docLabels[type] || type} generated`);
+    } catch (err) {
+      console.error("Document generation failed:", err);
       showToast("Failed to generate document", "error");
     }
     setGenerating(null);
@@ -234,6 +256,7 @@ export default function LeadDetailPage() {
   const handleSaveDocument = async (doc: Document) => {
     if (!lead) return;
     const ext = doc.type === "cover_letter" ? "txt" : "md";
+
     const filePath = await save({
       defaultPath: `${lead.client}-${doc.type}.${ext}`,
       filters: [{ name: "Text", extensions: [ext] }],
@@ -907,9 +930,7 @@ export default function LeadDetailPage() {
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="font-semibold">
-                      {activeDoc.type === "cover_letter"
-                        ? "Cover Letter"
-                        : "Key Questions"}
+                      {docLabels[activeDoc.type] || activeDoc.type}
                     </h2>
                     <div className="flex gap-2">
                       <button
@@ -948,6 +969,8 @@ export default function LeadDetailPage() {
                   >
                     {generating === "cover_letter"
                       ? "Generating..."
+                      : isAiEnabled
+                      ? "Cover Letter (AI)"
                       : "Cover Letter"}
                   </button>
                   <button
@@ -959,8 +982,24 @@ export default function LeadDetailPage() {
                       ? "Generating..."
                       : "Key Questions"}
                   </button>
+                  {isAiEnabled && (
+                    <button
+                      onClick={() => generateDocument("interview_prep")}
+                      disabled={generating !== null}
+                      className="w-full py-2 px-4 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                    >
+                      {generating === "interview_prep"
+                        ? "Generating..."
+                        : "Interview Prep"}
+                    </button>
+                  )}
                 </div>
               </section>
+
+              {/* AI Analysis */}
+              {isAiEnabled && id && (
+                <LeadAnalysisCard leadId={id} />
+              )}
 
               {/* Contact */}
               {(lead.contactName || lead.contactInfo) && (
@@ -992,9 +1031,7 @@ export default function LeadDetailPage() {
                               : ""
                           }`}
                         >
-                          {doc.type === "cover_letter"
-                            ? "Cover Letter"
-                            : "Key Questions"}
+                          {docLabels[doc.type] || doc.type}
                           <span className="text-gray-500 ml-2">
                             {new Date(doc.createdAt).toLocaleDateString()}
                           </span>

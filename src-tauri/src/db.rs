@@ -15,6 +15,7 @@ pub struct Database {
 ///   3. Never modify or reorder existing entries
 const MIGRATIONS: &[&str] = &[
     include_str!("migrations/001_initial_schema.sql"),
+    include_str!("migrations/002_ai_settings.sql"),
 ];
 
 impl Database {
