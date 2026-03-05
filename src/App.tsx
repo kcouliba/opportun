@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import { ToastProvider } from "@/components/Toast";
 import { AiQueueProvider } from "@/components/AiQueue";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useStartupAlerts } from "@/hooks/useStartupAlerts";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
 import NewLeadPage from "@/pages/NewLeadPage";
@@ -21,10 +22,16 @@ function Page({ children }: { children: ReactNode }) {
   return <ErrorBoundary>{children}</ErrorBoundary>;
 }
 
+function StartupAlerts() {
+  useStartupAlerts();
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <AiQueueProvider>
+        <StartupAlerts />
         <Navigation />
         <Routes>
           <Route path="/" element={<Page><DashboardPage /></Page>} />

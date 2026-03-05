@@ -252,6 +252,12 @@ export interface ParsedMission {
   endDate: string | null;
 }
 
+// Startup notification types
+export interface StartupAlert {
+  title: string;
+  body: string;
+}
+
 // Dashboard forecast types
 export interface DashboardForecast {
   securedIncome: SecuredIncome;

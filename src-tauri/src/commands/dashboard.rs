@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::models::{
     DashboardAlert, DashboardForecast, Lead, Mission, MissionIncome, MonthlyProjection,
-    PipelineIncome, SecuredIncome,
+    PipelineIncome, SecuredIncome, StartupAlert,
 };
 use chrono::{Datelike, Months, NaiveDate, Utc};
 use tauri::State;
@@ -453,4 +453,88 @@ pub fn get_dashboard_forecast(db: State<Database>) -> Result<DashboardForecast, 
         monthly_projection,
         alerts,
     })
+}
+
+#[tauri::command]
+pub fn get_startup_alerts(db: State<Database>) -> Result<Vec<StartupAlert>, String> {
+    let conn = db.conn.lock().unwrap();
+    let today = Utc::now().date_naive();
+
+    let mut alerts: Vec<StartupAlert> = Vec::new();
+
+    // 1. Follow-up reminders: overdue and due today
+    let mut stmt = conn
+        .prepare("SELECT * FROM \"Lead\" WHERE stage NOT IN ('won', 'lost') AND nextActionDate IS NOT NULL")
+        .map_err(|e| e.to_string())?;
+    let leads_with_actions: Vec<Lead> = stmt
+        .query_map([], row_to_lead)
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut overdue_names: Vec<String> = Vec::new();
+    let mut today_names: Vec<String> = Vec::new();
+
+    for lead in &leads_with_actions {
+        if let Some(ref date_str) = lead.next_action_date {
+            if let Some(action_date) = parse_date(date_str) {
+                if action_date < today {
+                    overdue_names.push(lead.client.clone());
+                } else if action_date == today {
+                    today_names.push(lead.client.clone());
+                }
+            }
+        }
+    }
+
+    if !overdue_names.is_empty() || !today_names.is_empty() {
+        let mut parts: Vec<String> = Vec::new();
+        if !overdue_names.is_empty() {
+            parts.push(format!(
+                "{} overdue ({})",
+                overdue_names.len(),
+                overdue_names.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
+        if !today_names.is_empty() {
+            parts.push(format!(
+                "{} today ({})",
+                today_names.len(),
+                today_names.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
+        alerts.push(StartupAlert {
+            title: "Follow-up Reminders".to_string(),
+            body: parts.join(" | "),
+        });
+    }
+
+    // 2. Missions ending within 30 days
+    let mut stmt = conn
+        .prepare("SELECT * FROM \"Mission\" WHERE status = 'active' AND endDate IS NOT NULL")
+        .map_err(|e| e.to_string())?;
+    let missions: Vec<Mission> = stmt
+        .query_map([], row_to_mission)
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    for m in &missions {
+        if let Some(ref end_str) = m.end_date {
+            if let Some(end_date) = parse_date(end_str) {
+                let days_until = (end_date - today).num_days();
+                if (0..=30).contains(&days_until) {
+                    alerts.push(StartupAlert {
+                        title: format!("Mission ending soon: {}", m.client),
+                        body: format!("{} ends in {} day{}", m.title, days_until, if days_until == 1 { "" } else { "s" }),
+                    });
+                }
+            }
+        }
+    }
+
+    // Truncate to max 3 alerts
+    alerts.truncate(3);
+
+    Ok(alerts)
 }

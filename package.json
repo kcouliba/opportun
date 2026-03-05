@@ -20,6 +20,7 @@
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",

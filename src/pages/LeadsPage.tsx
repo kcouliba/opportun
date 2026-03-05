@@ -5,6 +5,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { useToast } from "@/components/Toast";
+import KanbanBoard from "@/components/KanbanBoard";
 
 // Custom hook for debouncing values
 function useDebounce<T>(value: T, delay: number): T {
@@ -48,6 +49,9 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">(
+    () => (localStorage.getItem("leadsViewMode") as "list" | "kanban") || "list"
+  );
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const fetchLeads = useCallback(async (query: string) => {
@@ -76,6 +80,21 @@ export default function LeadsPage() {
     negotiating: leads.filter((l) => l.stage === "negotiating").length,
     won: leads.filter((l) => l.stage === "won").length,
     lost: leads.filter((l) => l.stage === "lost").length,
+  };
+
+  const handleViewMode = (mode: "list" | "kanban") => {
+    setViewMode(mode);
+    localStorage.setItem("leadsViewMode", mode);
+  };
+
+  const handleStageChange = async (leadId: string, newStage: string) => {
+    try {
+      await invoke("update_lead_stage", { id: leadId, stage: newStage });
+      await fetchLeads(debouncedSearch);
+      showToast(`Lead moved to ${newStage}`, "success");
+    } catch {
+      showToast("Failed to update stage", "error");
+    }
   };
 
   const handleExportCSV = async () => {
@@ -112,9 +131,30 @@ export default function LeadsPage() {
               {leads.length} total leads
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* View toggle */}
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+              <button
+                onClick={() => handleViewMode("list")}
+                className={`px-3 py-2 text-sm ${viewMode === "list" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                title="List view"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handleViewMode("kanban")}
+                className={`px-3 py-2 text-sm ${viewMode === "kanban" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                title="Kanban view"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                </svg>
+              </button>
+            </div>
             <Link
-              to="/leads/quick-capture?mode=file"
+              to="/leads/quick?mode=file"
               className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm font-medium flex items-center gap-2"
             >
               <svg
@@ -200,42 +240,58 @@ export default function LeadsPage() {
           )}
         </div>
 
-        {/* Pipeline Overview */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          <FilterButton
-            label="All"
-            count={leads.length}
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          />
-          {Object.entries(pipelineStats).map(([stage, count]) => (
-            <FilterButton
-              key={stage}
-              label={stageLabels[stage].label}
-              count={count}
-              active={filter === stage}
-              onClick={() => setFilter(stage)}
-            />
-          ))}
-        </div>
-
-        {/* Leads List */}
-        {filteredLeads.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <p className="text-gray-500 mb-4">No leads yet</p>
-            <Link
-              to="/leads/new"
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Add your first opportunity →
-            </Link>
-          </div>
+        {viewMode === "kanban" ? (
+          /* Kanban View */
+          leads.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <p className="text-gray-500 mb-4">No leads yet</p>
+              <Link to="/leads/new" className="text-blue-600 hover:text-blue-700 font-medium">
+                Add your first opportunity →
+              </Link>
+            </div>
+          ) : (
+            <KanbanBoard leads={leads} onStageChange={handleStageChange} />
+          )
         ) : (
-          <div className="space-y-4">
-            {filteredLeads.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} />
-            ))}
-          </div>
+          <>
+            {/* Pipeline Overview */}
+            <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+              <FilterButton
+                label="All"
+                count={leads.length}
+                active={filter === "all"}
+                onClick={() => setFilter("all")}
+              />
+              {Object.entries(pipelineStats).map(([stage, count]) => (
+                <FilterButton
+                  key={stage}
+                  label={stageLabels[stage].label}
+                  count={count}
+                  active={filter === stage}
+                  onClick={() => setFilter(stage)}
+                />
+              ))}
+            </div>
+
+            {/* Leads List */}
+            {filteredLeads.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                <p className="text-gray-500 mb-4">No leads yet</p>
+                <Link
+                  to="/leads/new"
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Add your first opportunity →
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredLeads.map((lead) => (
+                  <LeadCard key={lead.id} lead={lead} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

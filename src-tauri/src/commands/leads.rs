@@ -657,6 +657,35 @@ pub fn get_lead_stats(db: State<Database>) -> Result<LeadStats, String> {
 }
 
 #[tauri::command]
+pub fn update_lead_stage(db: State<Database>, id: String, stage: String) -> Result<Lead, String> {
+    let conn = db.conn.lock().unwrap();
+
+    let valid_stages = ["lead", "qualified", "negotiating", "won", "lost"];
+    if !valid_stages.contains(&stage.as_str()) {
+        return Err(format!("Invalid stage: {}", stage));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let rows = conn
+        .execute(
+            "UPDATE \"Lead\" SET \"stage\" = ?1, \"updatedAt\" = ?2 WHERE \"id\" = ?3",
+            rusqlite::params![stage, now, id],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("Lead not found".to_string());
+    }
+
+    conn.query_row(
+        "SELECT * FROM \"Lead\" WHERE \"id\" = ?1",
+        rusqlite::params![id],
+        row_to_lead,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn export_leads_csv(db: State<Database>, filters: LeadFilters) -> Result<String, String> {
     let conn = db.conn.lock().unwrap();
 

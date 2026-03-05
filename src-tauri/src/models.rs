@@ -431,6 +431,14 @@ pub struct ParsedProfileData {
     pub missions: Option<Vec<ParsedMission>>,
 }
 
+// Startup notification types
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupAlert {
+    pub title: String,
+    pub body: String,
+}
+
 // Dashboard forecast types
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

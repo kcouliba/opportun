@@ -1,10 +1,51 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { save, open } from "@tauri-apps/plugin-dialog";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
 import { useLeadSources } from "@/hooks/useLeadSources";
+import { useToast } from "@/components/Toast";
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
   const [sourceInput, setSourceInput] = useState("");
   const { sources: leadSources, addSource, removeSource } = useLeadSources();
+  const [restoring, setRestoring] = useState(false);
+
+  const handleExportBackup = async () => {
+    try {
+      const date = new Date().toISOString().split("T")[0];
+      const filePath = await save({
+        defaultPath: `opportun-backup-${date}.db`,
+        filters: [{ name: "SQLite Database", extensions: ["db"] }],
+      });
+      if (filePath) {
+        await invoke("backup_database", { destPath: filePath });
+        showToast("Backup exported successfully", "success");
+      }
+    } catch (e) {
+      showToast(`Backup failed: ${e}`, "error");
+    }
+  };
+
+  const handleImportBackup = async () => {
+    try {
+      const filePath = await open({
+        filters: [{ name: "SQLite Database", extensions: ["db"] }],
+        multiple: false,
+        directory: false,
+      });
+      if (!filePath) return;
+
+      await invoke("validate_database", { path: filePath });
+      setRestoring(true);
+      await invoke("restore_database", { sourcePath: filePath });
+      showToast("Database restored! Reloading...", "success");
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (e) {
+      setRestoring(false);
+      showToast(`Restore failed: ${e}`, "error");
+    }
+  };
 
   return (
     <main className="min-h-screen p-8">
@@ -57,6 +98,27 @@ export default function SettingsPage() {
           {/* AI Settings */}
           <Section title="AI Settings">
             <AiSettingsPanel />
+          </Section>
+
+          {/* Data */}
+          <Section title="Data">
+            <Field label="Export Backup" hint="Save a full copy of your database">
+              <button onClick={handleExportBackup} className="btn btn-secondary">
+                Export Backup
+              </button>
+            </Field>
+            <Field label="Import Backup" hint="Restore from a previous backup">
+              <button
+                onClick={handleImportBackup}
+                disabled={restoring}
+                className="btn btn-secondary"
+              >
+                {restoring ? "Restoring..." : "Import Backup"}
+              </button>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                This will replace all current data and reload the app.
+              </p>
+            </Field>
           </Section>
         </div>
       </div>

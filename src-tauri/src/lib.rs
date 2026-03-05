@@ -52,6 +52,7 @@ pub fn run() {
             commands::leads::delete_lead,
             commands::leads::get_lead_stats,
             commands::leads::export_leads_csv,
+            commands::leads::update_lead_stage,
             // Missions
             commands::missions::list_missions,
             commands::missions::get_mission,
@@ -84,6 +85,11 @@ pub fn run() {
             commands::import::parse_profile_text,
             // Dashboard
             commands::dashboard::get_dashboard_forecast,
+            commands::dashboard::get_startup_alerts,
+            // Backup
+            commands::backup::backup_database,
+            commands::backup::validate_database,
+            commands::backup::restore_database,
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,
