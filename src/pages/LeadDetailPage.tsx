@@ -5,9 +5,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useToast } from "@/components/Toast";
+import { useAiQueue } from "@/components/AiQueue";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import LeadAnalysisCard from "@/components/LeadAnalysisCard";
+import LeadSourceSelect from "@/components/LeadSourceSelect";
 
 interface Lead {
   id: string;
@@ -81,6 +83,7 @@ export default function LeadDetailPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { isAiEnabled } = useAiSettings();
+  const { enqueue } = useAiQueue();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -226,14 +229,14 @@ export default function LeadDetailPage() {
 
       if (type === "cover_letter" && isAiEnabled) {
         try {
-          doc = await invoke<Document>("generate_cover_letter_ai", { leadId: id });
+          doc = await enqueue<Document>("generate_cover_letter_ai", { leadId: id }, "Generating cover letter");
         } catch (aiErr) {
           console.warn("AI cover letter failed, falling back to template:", aiErr);
           // Fallback to template
           doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
         }
       } else if (type === "interview_prep") {
-        doc = await invoke<Document>("generate_interview_prep_ai", { leadId: id });
+        doc = await enqueue<Document>("generate_interview_prep_ai", { leadId: id }, "Generating interview prep");
       } else {
         doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
       }
@@ -510,19 +513,11 @@ export default function LeadDetailPage() {
               {/* Source */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label="Source">
-                  <select
+                  <LeadSourceSelect
                     value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                    onChange={(v) => setForm({ ...form, source: v })}
                     className="input"
-                  >
-                    <option value="recruiter">Recruiter</option>
-                    <option value="freework">Freework.com</option>
-                    <option value="linkedin">LinkedIn</option>
-                    <option value="comet">Comet</option>
-                    <option value="referral">Referral</option>
-                    <option value="direct">Direct</option>
-                    <option value="other">Other</option>
-                  </select>
+                  />
                 </Field>
                 <Field label="Source URL">
                   <input

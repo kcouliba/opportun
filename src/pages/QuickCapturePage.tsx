@@ -8,6 +8,7 @@ import { useAiParse } from "@/hooks/useAiParse";
 import { useImport } from "@/hooks/useImport";
 import FileDropZone from "@/components/FileDropZone";
 import { toWslPath, validateFileExtension } from "@/lib/wslPath";
+import LeadSourceSelect from "@/components/LeadSourceSelect";
 import type { ParsedJobDescription } from "@/types/index";
 
 type InputMode = "paste" | "url" | "file";
@@ -696,19 +697,11 @@ export default function QuickCapturePage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Source
               </label>
-              <select
+              <LeadSourceSelect
                 value={form.source}
-                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                onChange={(v) => setForm({ ...form, source: v })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="recruiter">Recruiter</option>
-                <option value="linkedin">LinkedIn</option>
-                <option value="freework">Freework</option>
-                <option value="comet">Comet</option>
-                <option value="referral">Referral</option>
-                <option value="direct">Direct</option>
-                <option value="other">Other</option>
-              </select>
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
-import AiSettingsPanel from "@/components/AiSettingsPanel";
 import { useProfileImport } from "@/hooks/useProfileImport";
 import FileDropZone from "@/components/FileDropZone";
 import { toWslPath, validateFileExtension } from "@/lib/wslPath";
-import type { Profile, EducationEntry, ParsedProfileData, ParsedMission, AiSettings } from "@/types/index";
+import type { Profile, EducationEntry, ParsedProfileData, ParsedMission } from "@/types/index";
 
 interface ProfileForm {
   id?: string;
@@ -108,15 +107,9 @@ export default function ProfilePage() {
   const [selectedMissions, setSelectedMissions] = useState<Set<number>>(new Set());
   const [missionFromYear, setMissionFromYear] = useState<string>("");
 
-  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
-
   const { importFromFile, importFromPath, importFromText, loading: importing, error: importError } = useProfileImport();
 
   useEffect(() => {
-    invoke<AiSettings>("get_ai_settings")
-      .then(setAiSettings)
-      .catch(() => {});
-
     invoke<Profile | null>("get_profile")
       .then((data) => {
         if (data) {
@@ -221,18 +214,6 @@ export default function ProfilePage() {
         await invoke("update_profile", { data: payload });
       } else {
         await invoke("create_profile", { data: payload });
-      }
-
-      if (aiSettings) {
-        await invoke("update_ai_settings", {
-          data: {
-            enabled: aiSettings.enabled,
-            modelName: aiSettings.modelName,
-            ollamaUrl: aiSettings.ollamaUrl,
-            temperature: aiSettings.temperature,
-            maxTokens: aiSettings.maxTokens,
-          },
-        });
       }
 
       // Create selected imported missions
@@ -757,11 +738,6 @@ export default function ProfilePage() {
                 Education entries can be added via LinkedIn import above.
               </p>
             </Field>
-          </Section>
-
-          {/* AI Settings */}
-          <Section title="AI Settings">
-            <AiSettingsPanel value={aiSettings} onChange={setAiSettings} />
           </Section>
 
           {/* Actions */}

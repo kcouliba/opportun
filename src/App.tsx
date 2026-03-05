@@ -1,6 +1,9 @@
+import { type ReactNode } from "react";
 import { Routes, Route } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import { ToastProvider } from "@/components/Toast";
+import { AiQueueProvider } from "@/components/AiQueue";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
 import NewLeadPage from "@/pages/NewLeadPage";
@@ -10,26 +13,34 @@ import MissionsPage from "@/pages/MissionsPage";
 import NewMissionPage from "@/pages/NewMissionPage";
 import MissionDetailPage from "@/pages/MissionDetailPage";
 import ProfilePage from "@/pages/ProfilePage";
+import SettingsPage from "@/pages/SettingsPage";
 import ActivitiesPage from "@/pages/ActivitiesPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+
+function Page({ children }: { children: ReactNode }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>;
+}
 
 export default function App() {
   return (
     <ToastProvider>
-      <Navigation />
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/leads" element={<LeadsPage />} />
-        <Route path="/leads/new" element={<NewLeadPage />} />
-        <Route path="/leads/quick" element={<QuickCapturePage />} />
-        <Route path="/leads/:id" element={<LeadDetailPage />} />
-        <Route path="/missions" element={<MissionsPage />} />
-        <Route path="/missions/new" element={<NewMissionPage />} />
-        <Route path="/missions/:id" element={<MissionDetailPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/activities" element={<ActivitiesPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-      </Routes>
+      <AiQueueProvider>
+        <Navigation />
+        <Routes>
+          <Route path="/" element={<Page><DashboardPage /></Page>} />
+          <Route path="/leads" element={<Page><LeadsPage /></Page>} />
+          <Route path="/leads/new" element={<Page><NewLeadPage /></Page>} />
+          <Route path="/leads/quick" element={<Page><QuickCapturePage /></Page>} />
+          <Route path="/leads/:id" element={<Page><LeadDetailPage /></Page>} />
+          <Route path="/missions" element={<Page><MissionsPage /></Page>} />
+          <Route path="/missions/new" element={<Page><NewMissionPage /></Page>} />
+          <Route path="/missions/:id" element={<Page><MissionDetailPage /></Page>} />
+          <Route path="/profile" element={<Page><ProfilePage /></Page>} />
+          <Route path="/settings" element={<Page><SettingsPage /></Page>} />
+          <Route path="/activities" element={<Page><ActivitiesPage /></Page>} />
+          <Route path="/analytics" element={<Page><AnalyticsPage /></Page>} />
+        </Routes>
+      </AiQueueProvider>
     </ToastProvider>
   );
 }

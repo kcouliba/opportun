@@ -1,28 +1,29 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useAiQueue } from "@/components/AiQueue";
 import type { LeadAnalysis, Document } from "@/types/index";
 
 export function useAiAnalysis() {
   const [analysis, setAnalysis] = useState<LeadAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { enqueue } = useAiQueue();
 
   const analyzeLead = useCallback(async (leadId: string) => {
     setAnalyzing(true);
     setError(null);
 
     try {
-      const result = await invoke<LeadAnalysis>("analyze_lead_ai", { leadId });
+      const result = await enqueue<LeadAnalysis>("analyze_lead_ai", { leadId }, "Analyzing lead");
       setAnalysis(result);
       setAnalyzing(false);
       return result;
     } catch (e) {
-      const msg = typeof e === "string" ? e : "AI analysis failed";
+      const msg = typeof e === "string" ? e : (e instanceof Error ? e.message : "AI analysis failed");
       setError(msg);
       setAnalyzing(false);
       return null;
     }
-  }, []);
+  }, [enqueue]);
 
   const loadSavedAnalysis = useCallback((documents: Document[]): boolean => {
     const analysisDoc = documents

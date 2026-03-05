@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
+import LeadSourceSelect from "@/components/LeadSourceSelect";
 
 interface LeadForm {
   client: string;
@@ -140,19 +141,11 @@ export default function NewLeadPage() {
           <Section title="Source">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Source">
-                <select
+                <LeadSourceSelect
                   value={lead.source}
-                  onChange={(e) => setLead({ ...lead, source: e.target.value })}
+                  onChange={(v) => setLead({ ...lead, source: v })}
                   className="input"
-                >
-                  <option value="recruiter">Recruiter</option>
-                  <option value="freework">Freework.com</option>
-                  <option value="linkedin">LinkedIn</option>
-                  <option value="comet">Comet</option>
-                  <option value="referral">Referral</option>
-                  <option value="direct">Direct</option>
-                  <option value="other">Other</option>
-                </select>
+                />
               </Field>
               <Field label="Source URL">
                 <input

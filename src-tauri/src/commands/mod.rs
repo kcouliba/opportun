@@ -6,3 +6,4 @@ pub mod documents;
 pub mod analytics;
 pub mod ai;
 pub mod import;
+pub mod settings;
