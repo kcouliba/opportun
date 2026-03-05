@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { PageLoader } from "@/components/LoadingSpinner";
-import type { Profile, Mission, Lead, FollowUpLead } from "@/types";
+import type { Profile, Mission, Lead, FollowUpLead, DashboardForecast, DashboardAlert } from "@/types";
 
 interface DashboardData {
   hasProfile: boolean;
@@ -17,6 +17,11 @@ interface DashboardData {
   overdueCount: number;
   todayCount: number;
   totalFollowUps: number;
+}
+
+function formatEuro(n: number): string {
+  if (n === 0) return "0 EUR";
+  return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }).replace(/,/g, " ") + " EUR";
 }
 
 function computeDashboardData(
@@ -78,6 +83,7 @@ function computeDashboardData(
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [forecast, setForecast] = useState<DashboardForecast | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -85,10 +91,12 @@ export default function DashboardPage() {
       invoke<Profile | null>("get_profile"),
       invoke<Mission[]>("list_missions"),
       invoke<{ data: Lead[] }>("list_leads", { filters: {} }),
+      invoke<DashboardForecast>("get_dashboard_forecast"),
     ])
-      .then(([profile, missions, leadsResponse]) => {
+      .then(([profile, missions, leadsResponse, forecastData]) => {
         const leads = leadsResponse.data || [];
         setData(computeDashboardData(profile, missions, leads));
+        setForecast(forecastData);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -183,19 +191,14 @@ export default function DashboardPage() {
               />
             </section>
 
-            {/* Alerts */}
-            {data.daysUntilEnd !== null && data.daysUntilEnd <= 60 && data.qualifiedCount === 0 && (
-              <section className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-amber-800 dark:text-amber-200 font-medium">
-                  Mission ends in {data.daysUntilEnd} days and you have no qualified leads
-                </p>
-                <p className="text-amber-700 dark:text-amber-300 text-sm mt-1">
-                  Consider adding more leads to your pipeline.{" "}
-                  <Link to="/leads/new" className="underline font-medium">
-                    Add a lead →
-                  </Link>
-                </p>
-              </section>
+            {/* Alerts Section */}
+            {forecast && forecast.alerts.length > 0 && (
+              <AlertsSection alerts={forecast.alerts} />
+            )}
+
+            {/* Income Forecast Section */}
+            {forecast && (
+              <IncomeForecastSection forecast={forecast} />
             )}
 
             {/* Follow-ups Section */}
@@ -314,6 +317,144 @@ export default function DashboardPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function AlertsSection({ alerts }: { alerts: DashboardAlert[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? alerts : alerts.slice(0, 4);
+
+  const severityStyles = {
+    critical: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200",
+    warning: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200",
+    info: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200",
+  };
+
+  const actionStyles = {
+    critical: "text-red-700 dark:text-red-300",
+    warning: "text-amber-700 dark:text-amber-300",
+    info: "text-blue-700 dark:text-blue-300",
+  };
+
+  return (
+    <section className="mb-8 space-y-2">
+      {visible.map((alert) => (
+        <div
+          key={alert.id}
+          className={`p-4 border rounded-lg ${severityStyles[alert.severity]}`}
+        >
+          <p className="font-medium">{alert.title}</p>
+          <p className="text-sm mt-1 opacity-90">
+            {alert.message}
+            {alert.actionLink && alert.actionLabel && (
+              <>
+                {" "}
+                <Link to={alert.actionLink} className={`underline font-medium ${actionStyles[alert.severity]}`}>
+                  {alert.actionLabel} →
+                </Link>
+              </>
+            )}
+          </p>
+        </div>
+      ))}
+      {alerts.length > 4 && !showAll && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          Show all ({alerts.length}) →
+        </button>
+      )}
+    </section>
+  );
+}
+
+function IncomeForecastSection({ forecast }: { forecast: DashboardForecast }) {
+  const { securedIncome, pipelineIncome, monthlyProjection } = forecast;
+  const hasData = securedIncome.missions.length > 0 || pipelineIncome.totalWeighted > 0;
+
+  if (!hasData) return null;
+
+  const maxTotal = Math.max(
+    ...monthlyProjection.map((m) => m.secured + m.potential),
+    1
+  );
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-lg font-semibold mb-4">Income Forecast</h2>
+
+      {/* Income summary - 2 column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Secured Income</h3>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+            {formatEuro(securedIncome.total)}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            ~{formatEuro(securedIncome.monthlyAvg)}/mo from active missions
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Pipeline (weighted)</h3>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+            {formatEuro(pipelineIncome.totalWeighted)}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            qualified @ 30%, negotiating @ 60%
+          </p>
+        </div>
+      </div>
+
+      {/* Monthly projection bars */}
+      {monthlyProjection.some((m) => m.secured > 0 || m.potential > 0) && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">6-Month Projection</h3>
+          <div className="space-y-3">
+            {monthlyProjection.map((m) => {
+              const total = m.secured + m.potential;
+              const securedWidth = maxTotal > 0 ? (m.secured / maxTotal) * 100 : 0;
+              const potentialWidth = maxTotal > 0 ? (m.potential / maxTotal) * 100 : 0;
+              return (
+                <div key={m.month} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 w-20 shrink-0">
+                    {m.month}
+                  </span>
+                  <div className="flex-1 flex h-5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    {securedWidth > 0 && (
+                      <div
+                        className="h-full bg-green-500"
+                        style={{ width: `${securedWidth}%` }}
+                      />
+                    )}
+                    {potentialWidth > 0 && (
+                      <div
+                        className="h-full bg-blue-400/60"
+                        style={{ width: `${potentialWidth}%` }}
+                      />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium w-28 text-right shrink-0">
+                    {formatEuro(total)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {/* Legend */}
+          <div className="flex gap-4 mt-4 text-xs text-gray-500 dark:text-gray-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" />
+              Secured
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-blue-400/60 inline-block" />
+              Potential
+            </span>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

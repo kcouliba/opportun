@@ -430,3 +430,59 @@ pub struct ParsedProfileData {
     pub education: Option<Vec<EducationEntry>>,
     pub missions: Option<Vec<ParsedMission>>,
 }
+
+// Dashboard forecast types
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardForecast {
+    pub secured_income: SecuredIncome,
+    pub pipeline_income: PipelineIncome,
+    pub monthly_projection: Vec<MonthlyProjection>,
+    pub alerts: Vec<DashboardAlert>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecuredIncome {
+    pub total: i64,
+    pub monthly_avg: i64,
+    pub missions: Vec<MissionIncome>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissionIncome {
+    pub mission_id: String,
+    pub client: String,
+    pub title: String,
+    pub remaining_income: i64,
+    pub monthly_income: i64,
+    pub ends_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineIncome {
+    pub total_weighted: i64,
+    pub qualified_value: i64,
+    pub negotiating_value: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonthlyProjection {
+    pub month: String,
+    pub secured: i64,
+    pub potential: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardAlert {
+    pub id: String,
+    pub severity: String,
+    pub title: String,
+    pub message: String,
+    pub action_label: Option<String>,
+    pub action_link: Option<String>,
+}

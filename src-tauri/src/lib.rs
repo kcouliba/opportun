@@ -82,6 +82,8 @@ pub fn run() {
             commands::import::read_file_text,
             commands::import::parse_job_text,
             commands::import::parse_profile_text,
+            // Dashboard
+            commands::dashboard::get_dashboard_forecast,
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,

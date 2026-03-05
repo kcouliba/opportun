@@ -252,6 +252,50 @@ export interface ParsedMission {
   endDate: string | null;
 }
 
+// Dashboard forecast types
+export interface DashboardForecast {
+  securedIncome: SecuredIncome;
+  pipelineIncome: PipelineIncome;
+  monthlyProjection: MonthlyProjection[];
+  alerts: DashboardAlert[];
+}
+
+export interface SecuredIncome {
+  total: number;
+  monthlyAvg: number;
+  missions: MissionIncome[];
+}
+
+export interface MissionIncome {
+  missionId: string;
+  client: string;
+  title: string;
+  remainingIncome: number;
+  monthlyIncome: number;
+  endsAt: string | null;
+}
+
+export interface PipelineIncome {
+  totalWeighted: number;
+  qualifiedValue: number;
+  negotiatingValue: number;
+}
+
+export interface MonthlyProjection {
+  month: string;
+  secured: number;
+  potential: number;
+}
+
+export interface DashboardAlert {
+  id: string;
+  severity: "critical" | "warning" | "info";
+  title: string;
+  message: string;
+  actionLabel: string | null;
+  actionLink: string | null;
+}
+
 export interface ParsedProfileData {
   name: string | null;
   title: string | null;
