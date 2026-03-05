@@ -11,7 +11,9 @@ use crate::models::{
 pub struct AiStatus {
     pub enabled: bool,
     pub available: bool,
+    pub model_available: bool,
     pub model_name: String,
+    pub local_models: Vec<String>,
 }
 
 #[tauri::command]
@@ -88,21 +90,29 @@ pub async fn check_ai_status(llm: tauri::State<'_, LlmState>) -> Result<AiStatus
         (settings.enabled, settings.model_name.clone())
     };
 
-    let available = if enabled {
+    let (available, local_models) = if enabled {
         log::info!("[AI] check_ai_status: AI enabled, checking Ollama availability...");
         let avail = llm.is_available().await;
         log::info!("[AI] check_ai_status: Ollama available={}", avail);
-        avail
+        let models = if avail {
+            llm.list_models().await.unwrap_or_default().into_iter().map(|m| m.name).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+        (avail, models)
     } else {
         log::info!("[AI] check_ai_status: AI disabled");
-        false
+        (false, vec![])
     };
 
-    log::info!("[AI] check_ai_status → enabled={}, available={}, model={}", enabled, available, model_name);
+    let model_available = local_models.iter().any(|m| m == &model_name);
+    log::info!("[AI] check_ai_status → enabled={}, available={}, model_available={}, model={}, local={:?}", enabled, available, model_available, model_name, local_models);
     Ok(AiStatus {
         enabled,
         available,
+        model_available,
         model_name,
+        local_models,
     })
 }
 

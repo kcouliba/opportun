@@ -5,6 +5,8 @@ import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
 import { useProfileImport } from "@/hooks/useProfileImport";
+import FileDropZone from "@/components/FileDropZone";
+import { toWslPath, validateFileExtension } from "@/lib/wslPath";
 import type { Profile, EducationEntry, ParsedProfileData, ParsedMission, AiSettings } from "@/types/index";
 
 interface ProfileForm {
@@ -101,13 +103,14 @@ export default function ProfilePage() {
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [pathInput, setPathInput] = useState("");
   const [importedMissions, setImportedMissions] = useState<ParsedMission[]>([]);
   const [selectedMissions, setSelectedMissions] = useState<Set<number>>(new Set());
   const [missionFromYear, setMissionFromYear] = useState<string>("");
 
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
 
-  const { importFromFile, importFromText, loading: importing, error: importError } = useProfileImport();
+  const { importFromFile, importFromPath, importFromText, loading: importing, error: importError } = useProfileImport();
 
   useEffect(() => {
     invoke<AiSettings>("get_ai_settings")
@@ -157,6 +160,29 @@ export default function ProfilePage() {
   const handleImportFile = async () => {
     const data = await importFromFile();
     if (data) applyImport(data);
+  };
+
+  const handleFileDrop = async (path: string) => {
+    const data = await importFromPath(path);
+    if (data) {
+      setImportOpen(true);
+      applyImport(data);
+    }
+  };
+
+  const handlePathImport = async () => {
+    if (!pathInput.trim()) return;
+    const wslPath = toWslPath(pathInput);
+    const extError = validateFileExtension(wslPath);
+    if (extError) {
+      showToast(extError, "error");
+      return;
+    }
+    const data = await importFromPath(wslPath);
+    if (data) {
+      setPathInput("");
+      applyImport(data);
+    }
   };
 
   const handleImportPaste = async () => {
@@ -287,6 +313,12 @@ export default function ProfilePage() {
         </header>
 
         {/* Import from LinkedIn */}
+        <FileDropZone
+          onFileDrop={handleFileDrop}
+          onError={(msg) => showToast(msg, "error")}
+          enabled={!importing}
+          label="Drop LinkedIn PDF here"
+        >
         <section className="mb-8">
           <button
             type="button"
@@ -314,6 +346,30 @@ export default function ProfilePage() {
                   className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
                   {pasteOpen ? "Hide paste" : "Or paste profile text"}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={pathInput}
+                  onChange={(e) => setPathInput(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="Or paste file path from Explorer"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handlePathImport();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handlePathImport}
+                  disabled={importing || !pathInput.trim()}
+                  className="btn btn-secondary text-sm"
+                >
+                  Import
                 </button>
               </div>
 
@@ -442,6 +498,7 @@ export default function ProfilePage() {
             </div>
           )}
         </section>
+        </FileDropZone>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Identity */}

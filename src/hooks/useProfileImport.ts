@@ -49,5 +49,21 @@ export function useProfileImport() {
     }
   }, []);
 
-  return { importFromFile, importFromText, loading, error };
+  const importFromPath = useCallback(async (path: string): Promise<ParsedProfileData | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const text = await invoke<string>("read_file_text", { path });
+      const result = await invoke<ParsedProfileData>("parse_profile_text", { text });
+      setLoading(false);
+      return result;
+    } catch (e) {
+      const msg = typeof e === "string" ? e : "Failed to import file";
+      setError(msg);
+      setLoading(false);
+      return null;
+    }
+  }, []);
+
+  return { importFromFile, importFromPath, importFromText, loading, error };
 }

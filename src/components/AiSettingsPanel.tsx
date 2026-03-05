@@ -23,10 +23,10 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
 
   // Internal state for uncontrolled mode
   const [internalSettings, setInternalSettings] = useState<AiSettings | null>(null);
-  const [internalStatus, setInternalStatus] = useState<{ available: boolean } | null>(null);
+  const [internalStatus, setInternalStatus] = useState<{ available: boolean; modelAvailable: boolean; localModels: string[] } | null>(null);
 
   // Status check (used in both modes)
-  const [status, setStatus] = useState<{ available: boolean } | null>(null);
+  const [status, setStatus] = useState<{ available: boolean; modelAvailable: boolean; localModels: string[] } | null>(null);
 
   const settings = controlled ? value : internalSettings;
 
@@ -40,7 +40,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
 
   useEffect(() => {
     if (settings?.enabled) {
-      invoke<{ available: boolean }>("check_ai_status")
+      invoke<{ available: boolean; modelAvailable: boolean; localModels: string[] }>("check_ai_status")
         .then((s) => {
           setStatus(s);
           if (!controlled) setInternalStatus(s);
@@ -91,7 +91,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   const handleCheckStatus = async () => {
     setChecking(true);
     try {
-      const s = await invoke<{ available: boolean }>("check_ai_status");
+      const s = await invoke<{ available: boolean; modelAvailable: boolean; localModels: string[] }>("check_ai_status");
       setStatus(s);
       if (!controlled) setInternalStatus(s);
     } catch {
@@ -146,23 +146,42 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       {settings.enabled && (
         <>
           {/* Status */}
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                displayStatus?.available ? "bg-green-500" : "bg-red-500"
-              }`}
-            />
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {displayStatus?.available ? "Ollama connected" : "Ollama not reachable"}
-            </span>
-            <button
-              type="button"
-              onClick={handleCheckStatus}
-              disabled={checking}
-              className="text-xs text-blue-600 hover:text-blue-700 ml-auto"
-            >
-              {checking ? "Checking..." : "Refresh"}
-            </button>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  displayStatus?.available ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {displayStatus?.available ? "Ollama connected" : "Ollama not reachable"}
+              </span>
+              <button
+                type="button"
+                onClick={handleCheckStatus}
+                disabled={checking}
+                className="text-xs text-blue-600 hover:text-blue-700 ml-auto"
+              >
+                {checking ? "Checking..." : "Refresh"}
+              </button>
+            </div>
+            {displayStatus?.available && (() => {
+              const modelReady = displayStatus.localModels?.includes(settings.modelName);
+              return (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      modelReady ? "bg-green-500" : "bg-red-500"
+                    }`}
+                  />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {modelReady
+                      ? `${settings.modelName} ready`
+                      : `${settings.modelName} not pulled`}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Model Name */}
@@ -180,20 +199,26 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
               />
             </div>
             <div className="flex gap-1 mt-1">
-              {MODEL_PRESETS.map((preset) => (
-                <button
-                  type="button"
-                  key={preset}
-                  onClick={() => handleModelChange(preset)}
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    settings.modelName === preset
-                      ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {preset}
-                </button>
-              ))}
+              {MODEL_PRESETS.map((preset) => {
+                const isSelected = settings.modelName === preset;
+                const isLocal = displayStatus?.localModels?.includes(preset);
+                return (
+                  <button
+                    type="button"
+                    key={preset}
+                    onClick={() => handleModelChange(preset)}
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      isSelected
+                        ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
+                        : isLocal
+                          ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

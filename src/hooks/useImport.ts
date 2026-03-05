@@ -65,5 +65,20 @@ export function useImport() {
     [],
   );
 
-  return { fetchUrl, readFile, parseText, loading, error };
+  const readFilePath = useCallback(async (path: string): Promise<string | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const text = await invoke<string>("read_file_text", { path });
+      setLoading(false);
+      return text;
+    } catch (e) {
+      const msg = typeof e === "string" ? e : "Failed to read file";
+      setError(msg);
+      setLoading(false);
+      return null;
+    }
+  }, []);
+
+  return { fetchUrl, readFile, readFilePath, parseText, loading, error };
 }

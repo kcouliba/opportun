@@ -65,7 +65,6 @@ impl LlmState {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn list_models(&self) -> Result<Vec<provider::ModelInfo>, LlmError> {
         self.make_provider()?.list_models().await
     }

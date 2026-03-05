@@ -166,7 +166,6 @@ impl OllamaProvider {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, LlmError> {
         let resp = self
             .client

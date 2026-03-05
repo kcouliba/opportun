@@ -6,6 +6,8 @@ import { useToast } from "@/components/Toast";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import { useAiParse } from "@/hooks/useAiParse";
 import { useImport } from "@/hooks/useImport";
+import FileDropZone from "@/components/FileDropZone";
+import { toWslPath, validateFileExtension } from "@/lib/wslPath";
 import type { ParsedJobDescription } from "@/types/index";
 
 type InputMode = "paste" | "url" | "file";
@@ -47,7 +49,7 @@ export default function QuickCapturePage() {
   const { showToast } = useToast();
   const { isAiEnabled } = useAiSettings();
   const { parseWithAi, parsing: aiParsing } = useAiParse();
-  const { fetchUrl, readFile, parseText, loading: importLoading, error: importError } = useImport();
+  const { fetchUrl, readFile, readFilePath, parseText, loading: importLoading, error: importError } = useImport();
 
   const [searchParams] = useSearchParams();
   const fileAutoOpened = useRef(false);
@@ -58,6 +60,7 @@ export default function QuickCapturePage() {
   );
   const [jobDescription, setJobDescription] = useState("");
   const [urlInput, setUrlInput] = useState("");
+  const [pathInput, setPathInput] = useState("");
   const [parseSource, setParseSource] = useState<ParseSource | null>(null);
   const [autoFilled, setAutoFilled] = useState<AutoFilledFields>({ ...EMPTY_AUTOFILLED });
 
@@ -173,6 +176,36 @@ export default function QuickCapturePage() {
   const handleFileImport = async () => {
     const text = await readFile();
     if (text) {
+      await handleTextImported(text);
+      showToast("Text imported from file", "success");
+    }
+  };
+
+  // Drag-and-drop file import
+  const handleFileDrop = async (path: string) => {
+    const text = await readFilePath(path);
+    if (text) {
+      setInputMode("file");
+      await handleTextImported(text);
+      showToast("Text imported from file", "success");
+    }
+  };
+
+  // Import from pasted file path (Windows or WSL)
+  const handlePathImport = async () => {
+    if (!pathInput.trim()) {
+      showToast("Paste a file path first", "error");
+      return;
+    }
+    const wslPath = toWslPath(pathInput);
+    const extError = validateFileExtension(wslPath);
+    if (extError) {
+      showToast(extError, "error");
+      return;
+    }
+    const text = await readFilePath(wslPath);
+    if (text) {
+      setPathInput("");
       await handleTextImported(text);
       showToast("Text imported from file", "success");
     }
@@ -392,6 +425,12 @@ export default function QuickCapturePage() {
         </header>
 
         {/* Import Section */}
+        <FileDropZone
+          onFileDrop={handleFileDrop}
+          onError={(msg) => showToast(msg, "error")}
+          enabled={!isLoading}
+          label="Drop job description file here"
+        >
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
           {/* Input mode tabs */}
           <div className="flex gap-1 mb-3 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
@@ -515,12 +554,35 @@ export default function QuickCapturePage() {
                 type="button"
                 onClick={handleFileImport}
                 disabled={isLoading}
-                className="w-full py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 disabled:opacity-50 transition-colors text-sm font-medium"
+                className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 disabled:opacity-50 transition-colors text-sm font-medium"
               >
                 {importLoading
                   ? "Reading file..."
                   : "Choose File (PDF, TXT, MD)"}
               </button>
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={pathInput}
+                  onChange={(e) => setPathInput(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="Or paste file path from Explorer"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handlePathImport();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handlePathImport}
+                  disabled={isLoading || !pathInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  Import
+                </button>
+              </div>
               {jobDescription && (
                 <div className="mt-3">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -557,6 +619,7 @@ export default function QuickCapturePage() {
             </>
           )}
         </div>
+        </FileDropZone>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Client - Most important */}
