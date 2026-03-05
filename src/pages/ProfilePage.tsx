@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
-import type { Profile } from "@/types/index";
+import { useProfileImport } from "@/hooks/useProfileImport";
+import type { Profile, EducationEntry, ParsedProfileData, ParsedMission, AiSettings } from "@/types/index";
 
 interface ProfileForm {
   id?: string;
@@ -20,6 +21,9 @@ interface ProfileForm {
   domains: string[];
   blacklistedClients: string[];
   blacklistedDomains: string[];
+  bio: string;
+  languages: string[];
+  education: EducationEntry[];
 }
 
 const defaultProfile: ProfileForm = {
@@ -35,7 +39,52 @@ const defaultProfile: ProfileForm = {
   domains: [],
   blacklistedClients: [],
   blacklistedDomains: [],
+  bio: "",
+  languages: [],
+  education: [],
 };
+
+/** Merge parsed data into profile: fill empty scalars, union-dedupe arrays */
+function mergeImportData(current: ProfileForm, data: ParsedProfileData): ProfileForm {
+  const unionDedupe = (existing: string[], incoming: string[] | null): string[] => {
+    if (!incoming) return existing;
+    const set = new Set(existing);
+    for (const item of incoming) {
+      set.add(item);
+    }
+    return [...set];
+  };
+
+  return {
+    ...current,
+    name: current.name || data.name || "",
+    title: current.title || data.title || "",
+    bio: current.bio || data.bio || "",
+    yearsExperience: current.yearsExperience ?? data.yearsExperience ?? null,
+    technologies: unionDedupe(current.technologies, data.technologies),
+    domains: unionDedupe(current.domains, data.domains),
+    languages: unionDedupe(current.languages, data.languages),
+    preferredLocations: data.location && !current.preferredLocations.includes(data.location)
+      ? [...current.preferredLocations, data.location]
+      : current.preferredLocations,
+    education: data.education && data.education.length > 0
+      ? dedupeEducation(current.education, data.education)
+      : current.education,
+  };
+}
+
+function dedupeEducation(existing: EducationEntry[], incoming: EducationEntry[]): EducationEntry[] {
+  const key = (e: EducationEntry) => `${e.school}|${e.degree ?? ""}`.toLowerCase();
+  const seen = new Set(existing.map(key));
+  const merged = [...existing];
+  for (const entry of incoming) {
+    if (!seen.has(key(entry))) {
+      merged.push(entry);
+      seen.add(key(entry));
+    }
+  }
+  return merged;
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -46,8 +95,23 @@ export default function ProfilePage() {
   const [techInput, setTechInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
+  const [langInput, setLangInput] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [importedMissions, setImportedMissions] = useState<ParsedMission[]>([]);
+  const [selectedMissions, setSelectedMissions] = useState<Set<number>>(new Set());
+  const [missionFromYear, setMissionFromYear] = useState<string>("");
+
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+
+  const { importFromFile, importFromText, loading: importing, error: importError } = useProfileImport();
 
   useEffect(() => {
+    invoke<AiSettings>("get_ai_settings")
+      .then(setAiSettings)
+      .catch(() => {});
+
     invoke<Profile | null>("get_profile")
       .then((data) => {
         if (data) {
@@ -65,12 +129,42 @@ export default function ProfilePage() {
             domains: data.domains ? JSON.parse(data.domains) : [],
             blacklistedClients: data.blacklistedClients ? JSON.parse(data.blacklistedClients) : [],
             blacklistedDomains: data.blacklistedDomains ? JSON.parse(data.blacklistedDomains) : [],
+            bio: data.bio ?? "",
+            languages: data.languages ? JSON.parse(data.languages) : [],
+            education: data.education ? JSON.parse(data.education) : [],
           });
         }
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const applyImport = (data: ParsedProfileData) => {
+    setProfile((prev) => mergeImportData(prev, data));
+    if (data.missions && data.missions.length > 0) {
+      setImportedMissions(data.missions);
+      setSelectedMissions(new Set(data.missions.map((_, i) => i)));
+      setMissionFromYear("");
+    }
+    const missionCount = data.missions?.length ?? 0;
+    const missionMsg = missionCount > 0 ? ` — ${missionCount} missions found` : "";
+    showToast(`Profile data imported${missionMsg} — review and save`, "success");
+  };
+
+  const handleImportFile = async () => {
+    const data = await importFromFile();
+    if (data) applyImport(data);
+  };
+
+  const handleImportPaste = async () => {
+    if (!pasteText.trim()) return;
+    const data = await importFromText(pasteText);
+    if (data) {
+      applyImport(data);
+      setPasteText("");
+      setPasteOpen(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +183,8 @@ export default function ProfilePage() {
       domains: JSON.stringify(profile.domains),
       blacklistedClients: JSON.stringify(profile.blacklistedClients),
       blacklistedDomains: JSON.stringify(profile.blacklistedDomains),
+      languages: JSON.stringify(profile.languages),
+      education: JSON.stringify(profile.education),
     };
 
     try {
@@ -98,7 +194,52 @@ export default function ProfilePage() {
         await invoke("create_profile", { data: payload });
       }
 
-      showToast("Profile saved successfully", "success");
+      if (aiSettings) {
+        await invoke("update_ai_settings", {
+          data: {
+            enabled: aiSettings.enabled,
+            modelName: aiSettings.modelName,
+            ollamaUrl: aiSettings.ollamaUrl,
+            temperature: aiSettings.temperature,
+            maxTokens: aiSettings.maxTokens,
+          },
+        });
+      }
+
+      // Create selected imported missions
+      const missionsToImport = importedMissions.filter((_, i) => selectedMissions.has(i));
+      if (missionsToImport.length > 0) {
+        let created = 0;
+        for (const m of missionsToImport) {
+          try {
+            await invoke("create_mission", {
+              data: {
+                client: m.client,
+                title: m.title,
+                description: m.description,
+                startDate: m.startDate ?? "2000-01-01",
+                endDate: m.endDate,
+                rate: 0,
+                daysPerWeek: 5.0,
+                status: m.endDate ? "completed" : "active",
+              },
+            });
+            created++;
+          } catch {
+            // Skip duplicates or errors
+          }
+        }
+        if (created > 0) {
+          showToast(`Profile saved — ${created} missions imported`, "success");
+        } else {
+          showToast("Profile saved successfully", "success");
+        }
+        setImportedMissions([]);
+        setSelectedMissions(new Set());
+      } else {
+        showToast("Profile saved successfully", "success");
+      }
+
       navigate("/");
     } catch {
       showToast("An error occurred while saving", "error");
@@ -107,7 +248,7 @@ export default function ProfilePage() {
   };
 
   const addToArray = (
-    field: keyof Pick<ProfileForm, "technologies" | "domains" | "preferredLocations">,
+    field: keyof Pick<ProfileForm, "technologies" | "domains" | "preferredLocations" | "languages">,
     value: string,
     setter: (v: string) => void
   ) => {
@@ -118,10 +259,14 @@ export default function ProfilePage() {
   };
 
   const removeFromArray = (
-    field: keyof Pick<ProfileForm, "technologies" | "domains" | "preferredLocations">,
+    field: keyof Pick<ProfileForm, "technologies" | "domains" | "preferredLocations" | "languages">,
     value: string
   ) => {
     setProfile({ ...profile, [field]: profile[field].filter((v) => v !== value) });
+  };
+
+  const removeEducation = (index: number) => {
+    setProfile({ ...profile, education: profile.education.filter((_, i) => i !== index) });
   };
 
   if (loading) {
@@ -137,6 +282,163 @@ export default function ProfilePage() {
             This powers the smart filtering. Leads will be scored against your preferences.
           </p>
         </header>
+
+        {/* Import from LinkedIn */}
+        <section className="mb-8">
+          <button
+            type="button"
+            onClick={() => setImportOpen(!importOpen)}
+            className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <span>{importOpen ? "▾" : "▸"}</span>
+            Import from LinkedIn
+          </button>
+
+          {importOpen && (
+            <div className="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleImportFile}
+                  disabled={importing}
+                  className="btn btn-secondary text-sm"
+                >
+                  {importing ? "Parsing..." : "Upload LinkedIn PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPasteOpen(!pasteOpen)}
+                  className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  {pasteOpen ? "Hide paste" : "Or paste profile text"}
+                </button>
+              </div>
+
+              {pasteOpen && (
+                <div className="space-y-2">
+                  <textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    className="input w-full h-32 text-sm"
+                    placeholder="Paste your LinkedIn profile text here..."
+                  />
+                  <button
+                    type="button"
+                    onClick={handleImportPaste}
+                    disabled={importing || !pasteText.trim()}
+                    className="btn btn-secondary text-sm"
+                  >
+                    {importing ? "Parsing..." : "Parse"}
+                  </button>
+                </div>
+              )}
+
+              {importError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>
+              )}
+
+              <p className="text-xs text-gray-500">
+                Extracted data will auto-fill empty fields. Existing data is preserved.
+              </p>
+            </div>
+          )}
+
+          {importedMissions.length > 0 && (
+            <div className="mt-3 p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  {selectedMissions.size}/{importedMissions.length} missions selected
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setImportedMissions([]); setSelectedMissions(new Set()); }}
+                  className="text-xs text-gray-500 hover:text-red-600"
+                >
+                  Dismiss all
+                </button>
+              </div>
+
+              {/* Filter + bulk actions */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-600 dark:text-gray-400">From year:</label>
+                  <input
+                    type="number"
+                    min="1990"
+                    max="2030"
+                    placeholder="All"
+                    value={missionFromYear}
+                    onChange={(e) => {
+                      const year = e.target.value;
+                      setMissionFromYear(year);
+                      if (year) {
+                        const newSet = new Set<number>();
+                        importedMissions.forEach((m, i) => {
+                          const startYear = m.startDate ? parseInt(m.startDate.slice(0, 4), 10) : 0;
+                          if (startYear >= parseInt(year, 10)) newSet.add(i);
+                        });
+                        setSelectedMissions(newSet);
+                      } else {
+                        setSelectedMissions(new Set(importedMissions.map((_, i) => i)));
+                      }
+                    }}
+                    className="w-20 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMissions(new Set(importedMissions.map((_, i) => i)))}
+                  className="text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMissions(new Set())}
+                  className="text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Deselect all
+                </button>
+              </div>
+
+              {/* Mission list with checkboxes */}
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {importedMissions.map((m, i) => (
+                  <label
+                    key={i}
+                    className={`flex items-start gap-2 text-sm p-1.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 ${
+                      selectedMissions.has(i) ? "" : "opacity-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedMissions.has(i)}
+                      onChange={() => {
+                        setSelectedMissions((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(i)) next.delete(i); else next.add(i);
+                          return next;
+                        });
+                      }}
+                      className="mt-0.5 rounded border-gray-300"
+                    />
+                    <div className="min-w-0">
+                      <span className="font-medium">{m.title}</span>
+                      <span className="text-gray-500"> at {m.client}</span>
+                      <span className="text-xs text-gray-400 ml-2">
+                        {m.startDate?.slice(0, 7) ?? "?"} → {m.endDate?.slice(0, 7) ?? "Present"}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Selected missions will be created when you save. Rate defaults to 0 — edit them in Missions after import.
+              </p>
+            </div>
+          )}
+        </section>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Identity */}
@@ -156,6 +458,14 @@ export default function ProfilePage() {
                 value={profile.title}
                 onChange={(e) => setProfile({ ...profile, title: e.target.value })}
                 className="input"
+              />
+            </Field>
+            <Field label="Bio" hint="Short professional summary">
+              <textarea
+                value={profile.bio}
+                onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                className="input w-full"
+                rows={4}
               />
             </Field>
             <Field label="Years of Experience">
@@ -313,11 +623,75 @@ export default function ProfilePage() {
               </div>
               <TagList items={profile.domains} onRemove={(v) => removeFromArray("domains", v)} />
             </Field>
+            <Field label="Languages">
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={langInput}
+                  onChange={(e) => setLangInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addToArray("languages", langInput, setLangInput);
+                    }
+                  }}
+                  className="input flex-1"
+                  placeholder="e.g., French, English, Spanish..."
+                />
+                <button
+                  type="button"
+                  onClick={() => addToArray("languages", langInput, setLangInput)}
+                  className="btn btn-secondary"
+                >
+                  Add
+                </button>
+              </div>
+              <TagList items={profile.languages} onRemove={(v) => removeFromArray("languages", v)} />
+            </Field>
+          </Section>
+
+          {/* Background */}
+          <Section title="Background">
+            <Field label="Education">
+              {profile.education.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {profile.education.map((entry, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="text-sm">
+                        <p className="font-medium">{entry.school}</p>
+                        {entry.degree && (
+                          <p className="text-gray-600 dark:text-gray-400">{entry.degree}</p>
+                        )}
+                        {entry.field && (
+                          <p className="text-gray-500 dark:text-gray-500">{entry.field}</p>
+                        )}
+                        {entry.endYear && (
+                          <p className="text-gray-400 text-xs">{entry.endYear}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeEducation(idx)}
+                        className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 text-sm ml-2"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Education entries can be added via LinkedIn import above.
+              </p>
+            </Field>
           </Section>
 
           {/* AI Settings */}
           <Section title="AI Settings">
-            <AiSettingsPanel />
+            <AiSettingsPanel value={aiSettings} onChange={setAiSettings} />
           </Section>
 
           {/* Actions */}

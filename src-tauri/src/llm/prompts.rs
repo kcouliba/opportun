@@ -1,4 +1,4 @@
-use crate::models::{Lead, Profile};
+use crate::models::{Lead, Mission, Profile};
 
 pub const JOB_PARSING_SYSTEM: &str = r#"You are a job description parser for French freelance IT markets. Extract structured data from job postings.
 
@@ -44,9 +44,9 @@ Return a JSON object:
 
 Rules:
 - Be specific — reference actual technologies, domains, and rates from the data
-- Strengths should map to concrete profile matches
+- Strengths should map to concrete profile matches — reference past missions when relevant
 - Risks should be honest — flag skill gaps, rate mismatches, or red flags
-- Talking points are things the freelancer should highlight in interviews
+- Talking points should reference specific past missions and achievements the freelancer can highlight
 - Questions are what they should ask the client
 - Rate advice should consider their target TJM vs offered rate
 - Only return valid JSON, no markdown fences"#;
@@ -62,7 +62,7 @@ Rules:
 - Structure: 3-4 paragraphs (introduction, skills match, value proposition, closing)
 - Adapt language (French or English) based on the job description language
 - Reference the client by name and the specific role
-- Include concrete details from the profile (years of experience, domain expertise)
+- Include concrete details from the profile (years of experience, domain expertise) and reference relevant past missions
 - End with a clear call to action
 - Output plain text only — no JSON, no markdown fences"#;
 
@@ -96,8 +96,8 @@ Return a JSON object with this exact structure:
 }
 
 Rules:
-- Generate 3-5 technical questions relevant to the required technologies
-- Generate 2-3 behavioral questions
+- Generate 3-5 technical questions relevant to the required technologies — suggested answers should reference past missions when applicable
+- Generate 2-3 behavioral questions — use past missions as basis for STAR-method answers
 - Rate negotiation should be specific to the numbers (offered vs target TJM)
 - Suggest 3-4 strategic questions to ask the client
 - Red flags should be honest — flag concerns from the job description
@@ -134,7 +134,39 @@ pub fn format_profile_for_prompt(profile: &Profile) -> String {
     if let Some(ref blacklisted) = profile.blacklisted_domains {
         parts.push(format!("Blacklisted domains: {}", blacklisted));
     }
+    if let Some(ref bio) = profile.bio {
+        parts.push(format!("Bio: {}", bio));
+    }
+    if let Some(ref languages) = profile.languages {
+        parts.push(format!("Languages: {}", languages));
+    }
+    if let Some(ref education) = profile.education {
+        parts.push(format!("Education: {}", education));
+    }
 
+    parts.join("\n")
+}
+
+pub fn format_missions_for_prompt(missions: &[Mission]) -> String {
+    if missions.is_empty() {
+        return String::new();
+    }
+    let mut parts = Vec::new();
+    for m in missions {
+        let mut line = format!("- {} at {} ({}", m.title, m.client, m.start_date);
+        if let Some(ref end) = m.end_date {
+            line.push_str(&format!(" → {})", end));
+        } else {
+            line.push_str(" → ongoing)");
+        }
+        line.push_str(&format!(", {}€/day, {}d/week", m.rate, m.days_per_week));
+        if let Some(ref desc) = m.description {
+            if !desc.is_empty() {
+                line.push_str(&format!(" — {}", desc));
+            }
+        }
+        parts.push(line);
+    }
     parts.join("\n")
 }
 

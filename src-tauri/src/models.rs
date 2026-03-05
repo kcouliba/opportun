@@ -10,7 +10,9 @@ pub struct Profile {
     pub title: Option<String>,
     pub years_experience: Option<i64>,
     pub legal_structure: Option<String>,
+    #[serde(rename = "minimumTJM")]
     pub minimum_tjm: Option<i64>,
+    #[serde(rename = "targetTJM")]
     pub target_tjm: Option<i64>,
     pub preferred_locations: Option<String>,
     pub max_commute_days: Option<i64>,
@@ -18,6 +20,9 @@ pub struct Profile {
     pub domains: Option<String>,
     pub blacklisted_clients: Option<String>,
     pub blacklisted_domains: Option<String>,
+    pub bio: Option<String>,
+    pub languages: Option<String>,
+    pub education: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -129,7 +134,9 @@ pub struct ProfileInput {
     pub title: Option<String>,
     pub years_experience: Option<i64>,
     pub legal_structure: Option<String>,
+    #[serde(alias = "minimumTJM")]
     pub minimum_tjm: Option<i64>,
+    #[serde(alias = "targetTJM")]
     pub target_tjm: Option<i64>,
     pub preferred_locations: Option<String>,
     pub max_commute_days: Option<i64>,
@@ -137,6 +144,9 @@ pub struct ProfileInput {
     pub domains: Option<String>,
     pub blacklisted_clients: Option<String>,
     pub blacklisted_domains: Option<String>,
+    pub bio: Option<String>,
+    pub languages: Option<String>,
+    pub education: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -380,4 +390,39 @@ pub struct SourceCount {
 pub struct MonthlyCount {
     pub month: String,
     pub count: usize,
+}
+
+// Profile import types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EducationEntry {
+    pub school: String,
+    pub degree: Option<String>,
+    pub field: Option<String>,
+    pub end_year: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedMission {
+    pub client: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedProfileData {
+    pub name: Option<String>,
+    pub title: Option<String>,
+    pub bio: Option<String>,
+    pub years_experience: Option<i64>,
+    pub location: Option<String>,
+    pub technologies: Option<Vec<String>>,
+    pub domains: Option<Vec<String>>,
+    pub languages: Option<Vec<String>>,
+    pub education: Option<Vec<EducationEntry>>,
+    pub missions: Option<Vec<ParsedMission>>,
 }

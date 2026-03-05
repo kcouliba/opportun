@@ -1,19 +1,56 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useAiSettings } from "@/hooks/useAiSettings";
 import { useToast } from "@/components/Toast";
 import DownloadProgressBar from "@/components/DownloadProgressBar";
-import type { DownloadProgress } from "@/types/index";
+import type { AiSettings, DownloadProgress } from "@/types/index";
 
 const MODEL_PRESETS = ["llama3.2:3b", "mistral:7b", "phi3:mini"];
 
-export default function AiSettingsPanel() {
-  const { settings, status, updateSettings, checkStatus } = useAiSettings();
+interface AiSettingsPanelProps {
+  /** Controlled mode: external state + onChange instead of auto-saving */
+  value?: AiSettings | null;
+  onChange?: (settings: AiSettings) => void;
+}
+
+export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProps) {
+  const controlled = value !== undefined && onChange !== undefined;
+
   const { showToast } = useToast();
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState<DownloadProgress | null>(null);
   const [checking, setChecking] = useState(false);
+
+  // Internal state for uncontrolled mode
+  const [internalSettings, setInternalSettings] = useState<AiSettings | null>(null);
+  const [internalStatus, setInternalStatus] = useState<{ available: boolean } | null>(null);
+
+  // Status check (used in both modes)
+  const [status, setStatus] = useState<{ available: boolean } | null>(null);
+
+  const settings = controlled ? value : internalSettings;
+
+  useEffect(() => {
+    if (!controlled) {
+      invoke<AiSettings>("get_ai_settings")
+        .then(setInternalSettings)
+        .catch(() => {});
+    }
+  }, [controlled]);
+
+  useEffect(() => {
+    if (settings?.enabled) {
+      invoke<{ available: boolean }>("check_ai_status")
+        .then((s) => {
+          setStatus(s);
+          if (!controlled) setInternalStatus(s);
+        })
+        .catch(() => {
+          setStatus(null);
+          if (!controlled) setInternalStatus(null);
+        });
+    }
+  }, [settings?.enabled, controlled]);
 
   useEffect(() => {
     const unlisten = listen<DownloadProgress>("llm-download-progress", (event) => {
@@ -22,44 +59,44 @@ export default function AiSettingsPanel() {
         setPulling(false);
         setPullProgress(null);
         showToast("Model downloaded successfully", "success");
-        checkStatus();
+        handleCheckStatus();
       }
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [showToast, checkStatus]);
+  }, [showToast]);
 
   if (!settings) return null;
 
-  const handleToggle = async () => {
-    try {
-      await updateSettings({ enabled: !settings.enabled });
-    } catch {
-      showToast("Failed to update AI settings", "error");
+  const update = async (patch: Partial<AiSettings>) => {
+    const updated = { ...settings, ...patch };
+    if (controlled) {
+      onChange(updated);
+    } else {
+      try {
+        const saved = await invoke<AiSettings>("update_ai_settings", { data: patch });
+        setInternalSettings(saved);
+      } catch {
+        showToast("Failed to update AI settings", "error");
+      }
     }
   };
 
-  const handleModelChange = async (modelName: string) => {
-    try {
-      await updateSettings({ modelName });
-    } catch {
-      showToast("Failed to update model", "error");
-    }
-  };
-
-  const handleUrlChange = async (ollamaUrl: string) => {
-    try {
-      await updateSettings({ ollamaUrl });
-    } catch {
-      showToast("Failed to update URL", "error");
-    }
-  };
+  const handleToggle = () => update({ enabled: !settings.enabled });
+  const handleModelChange = (modelName: string) => update({ modelName });
+  const handleUrlChange = (ollamaUrl: string) => update({ ollamaUrl });
 
   const handleCheckStatus = async () => {
     setChecking(true);
-    await checkStatus();
+    try {
+      const s = await invoke<{ available: boolean }>("check_ai_status");
+      setStatus(s);
+      if (!controlled) setInternalStatus(s);
+    } catch {
+      setStatus(null);
+    }
     setChecking(false);
   };
 
@@ -71,13 +108,15 @@ export default function AiSettingsPanel() {
       setPulling(false);
       setPullProgress(null);
       showToast("Model downloaded successfully", "success");
-      checkStatus();
+      handleCheckStatus();
     } catch (e) {
       setPulling(false);
       setPullProgress(null);
       showToast(typeof e === "string" ? e : "Failed to pull model", "error");
     }
   };
+
+  const displayStatus = controlled ? status : internalStatus;
 
   return (
     <div className="space-y-4">
@@ -90,6 +129,7 @@ export default function AiSettingsPanel() {
           </p>
         </div>
         <button
+          type="button"
           onClick={handleToggle}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
             settings.enabled ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
@@ -109,13 +149,14 @@ export default function AiSettingsPanel() {
           <div className="flex items-center gap-2">
             <span
               className={`w-2 h-2 rounded-full ${
-                status?.available ? "bg-green-500" : "bg-red-500"
+                displayStatus?.available ? "bg-green-500" : "bg-red-500"
               }`}
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              {status?.available ? "Ollama connected" : "Ollama not reachable"}
+              {displayStatus?.available ? "Ollama connected" : "Ollama not reachable"}
             </span>
             <button
+              type="button"
               onClick={handleCheckStatus}
               disabled={checking}
               className="text-xs text-blue-600 hover:text-blue-700 ml-auto"
@@ -141,6 +182,7 @@ export default function AiSettingsPanel() {
             <div className="flex gap-1 mt-1">
               {MODEL_PRESETS.map((preset) => (
                 <button
+                  type="button"
                   key={preset}
                   onClick={() => handleModelChange(preset)}
                   className={`text-xs px-2 py-0.5 rounded ${
@@ -172,6 +214,7 @@ export default function AiSettingsPanel() {
           {/* Pull Model */}
           <div>
             <button
+              type="button"
               onClick={handlePullModel}
               disabled={pulling || !settings.modelName}
               className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"

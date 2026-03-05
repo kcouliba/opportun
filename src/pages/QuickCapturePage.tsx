@@ -1,150 +1,60 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import { useAiParse } from "@/hooks/useAiParse";
+import { useImport } from "@/hooks/useImport";
+import type { ParsedJobDescription } from "@/types/index";
 
-// Common technology keywords to detect
-const TECH_KEYWORDS = [
-  // Frontend
-  "React", "Vue", "Angular", "Next.js", "Nuxt", "Svelte", "TypeScript", "JavaScript",
-  "HTML", "CSS", "Tailwind", "SASS", "SCSS", "Redux", "Zustand", "GraphQL",
-  // Backend
-  "Node.js", "Node", "Express", "NestJS", "Python", "Django", "FastAPI", "Flask",
-  "Java", "Spring", "Spring Boot", "Kotlin", "Go", "Golang", "Rust", "Ruby", "Rails",
-  "PHP", "Laravel", "Symfony", ".NET", "C#",
-  // Data
-  "PostgreSQL", "Postgres", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Kafka",
-  "RabbitMQ", "SQL", "NoSQL", "DynamoDB", "Cassandra",
-  // Cloud & DevOps
-  "AWS", "Azure", "GCP", "Google Cloud", "Docker", "Kubernetes", "K8s", "Terraform",
-  "CI/CD", "Jenkins", "GitLab", "GitHub Actions", "Ansible", "Linux",
-  // Mobile
-  "React Native", "Flutter", "iOS", "Android", "Swift", "Objective-C",
-  // AI/ML
-  "Machine Learning", "ML", "AI", "TensorFlow", "PyTorch", "LLM", "NLP",
-];
-
-// French cities and remote keywords
-const LOCATIONS = [
-  "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes", "Strasbourg",
-  "Montpellier", "Bordeaux", "Lille", "Rennes", "Reims", "Le Havre", "Grenoble",
-  "Ile-de-France", "IDF", "La Défense",
-];
-
-interface ParsedData {
-  technologies: string[];
-  rate: number | null;
-  rateDisplay: string | null; // For showing the original parsed text
-  location: string | null;
-  remotePolicy: string | null;
-}
+type InputMode = "paste" | "url" | "file";
 
 interface AutoFilledFields {
   technologies: boolean;
   rate: boolean;
   location: boolean;
   remotePolicy: boolean;
+  title: boolean;
+  client: boolean;
+  domains: boolean;
+  duration: boolean;
+  startDate: boolean;
+  contactName: boolean;
+  contactInfo: boolean;
+  description: boolean;
 }
+
+const EMPTY_AUTOFILLED: AutoFilledFields = {
+  technologies: false,
+  rate: false,
+  location: false,
+  remotePolicy: false,
+  title: false,
+  client: false,
+  domains: false,
+  duration: false,
+  startDate: false,
+  contactName: false,
+  contactInfo: false,
+  description: false,
+};
 
 type ParseSource = "auto" | "ai";
-
-function parseJobDescription(text: string): ParsedData {
-  const result: ParsedData = {
-    technologies: [],
-    rate: null,
-    rateDisplay: null,
-    location: null,
-    remotePolicy: null,
-  };
-
-  const textLower = text.toLowerCase();
-
-  // Extract technologies (case-insensitive matching)
-  const foundTechs = new Set<string>();
-  for (const tech of TECH_KEYWORDS) {
-    // Create a regex that matches the tech as a whole word
-    const regex = new RegExp(`\\b${tech.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
-    if (regex.test(text)) {
-      foundTechs.add(tech);
-    }
-  }
-  result.technologies = Array.from(foundTechs);
-
-  // Extract rate patterns
-  // Patterns: "€600/day", "600€/jour", "TJM 600", "600-700€", "TJM: 600€", etc.
-  const ratePatterns = [
-    /(\d{3,4})\s*[-–]\s*(\d{3,4})\s*€/i, // 600-700€
-    /€\s*(\d{3,4})\s*[-–]\s*(\d{3,4})/i, // €600-700
-    /(\d{3,4})\s*€\s*[/\\]?\s*(jour|day|j)/i, // 600€/jour
-    /€\s*(\d{3,4})\s*[/\\]?\s*(jour|day|j)/i, // €600/jour
-    /tjm\s*:?\s*(\d{3,4})/i, // TJM 600 or TJM: 600
-    /(\d{3,4})\s*€/i, // Simple 600€
-    /€\s*(\d{3,4})/i, // Simple €600
-  ];
-
-  for (const pattern of ratePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      // Check if it's a range pattern (second capture group is also a number)
-      if (match[2] && /^\d+$/.test(match[2])) {
-        const low = parseInt(match[1], 10);
-        const high = parseInt(match[2], 10);
-        // Use the average of the range
-        result.rate = Math.round((low + high) / 2);
-        result.rateDisplay = `${match[1]}-${match[2]}€/day`;
-      } else if (match[1]) {
-        result.rate = parseInt(match[1], 10);
-        result.rateDisplay = `${match[1]}€/day`;
-      }
-      break;
-    }
-  }
-
-  // Extract location
-  for (const location of LOCATIONS) {
-    const regex = new RegExp(`\\b${location}\\b`, "i");
-    if (regex.test(text)) {
-      result.location = location;
-      break;
-    }
-  }
-
-  // Extract remote policy
-  if (/\b(full\s*remote|100%?\s*remote|télétravail\s*(complet|total|100%?))\b/i.test(textLower)) {
-    result.remotePolicy = "full-remote";
-  } else if (/\b(remote|télétravail)\b/i.test(textLower) && !/\b(no\s*remote|pas\s*de\s*télétravail)\b/i.test(textLower)) {
-    // Check for hybrid indicators
-    if (/\b(hybrid|hybride|partiel|2j|3j|2\s*jours?|3\s*jours?)\b/i.test(textLower)) {
-      result.remotePolicy = "hybrid";
-    } else {
-      result.remotePolicy = "remote";
-    }
-  } else if (/\b(on[\s-]?site|présentiel|sur\s*site|bureau)\b/i.test(textLower)) {
-    result.remotePolicy = "on-site";
-  } else if (/\b(hybrid|hybride)\b/i.test(textLower)) {
-    result.remotePolicy = "hybrid";
-  }
-
-  return result;
-}
 
 export default function QuickCapturePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { isAiEnabled } = useAiSettings();
   const { parseWithAi, parsing: aiParsing } = useAiParse();
+  const { fetchUrl, readFile, parseText, loading: importLoading } = useImport();
+
   const [saving, setSaving] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("paste");
   const [jobDescription, setJobDescription] = useState("");
+  const [urlInput, setUrlInput] = useState("");
   const [parseSource, setParseSource] = useState<ParseSource | null>(null);
-  const [autoFilled, setAutoFilled] = useState<AutoFilledFields>({
-    technologies: false,
-    rate: false,
-    location: false,
-    remotePolicy: false,
-  });
+  const [autoFilled, setAutoFilled] = useState<AutoFilledFields>({ ...EMPTY_AUTOFILLED });
 
   // Get tomorrow's date as default for follow-up
   const tomorrow = new Date();
@@ -160,112 +70,184 @@ export default function QuickCapturePage() {
     notes: "",
     technologies: [] as string[],
     rate: null as number | null,
-    rateDisplay: "", // For showing the parsed rate in UI
+    rateDisplay: "",
     location: "",
     remotePolicy: "",
   });
 
-  const applyRegexParse = () => {
-    const parsed = parseJobDescription(jobDescription);
-    const newAutoFilled: AutoFilledFields = {
-      technologies: false,
-      rate: false,
-      location: false,
-      remotePolicy: false,
-    };
+  // Apply parsed result to form fields
+  const applyParsedResult = useCallback(
+    (parsed: ParsedJobDescription, source: ParseSource) => {
+      const newAutoFilled: AutoFilledFields = { ...EMPTY_AUTOFILLED };
+      const updates: Partial<typeof form> = {};
 
-    const updates: Partial<typeof form> = {};
+      if (parsed.technologies && parsed.technologies.length > 0) {
+        updates.technologies = parsed.technologies;
+        newAutoFilled.technologies = true;
+      }
+      if (parsed.rate !== null) {
+        updates.rate = parsed.rate;
+        updates.rateDisplay = `${parsed.rate}€/day`;
+        newAutoFilled.rate = true;
+      }
+      if (parsed.location) {
+        updates.location = parsed.location;
+        newAutoFilled.location = true;
+      }
+      if (parsed.remotePolicy) {
+        updates.remotePolicy = parsed.remotePolicy;
+        newAutoFilled.remotePolicy = true;
+      }
+      if (parsed.client) {
+        updates.client = parsed.client;
+        newAutoFilled.client = true;
+      }
+      if (parsed.contactName) {
+        updates.contactName = parsed.contactName;
+        newAutoFilled.contactName = true;
+      }
+      if (parsed.contactInfo) {
+        updates.contactInfo = parsed.contactInfo;
+        newAutoFilled.contactInfo = true;
+      }
 
-    if (parsed.technologies.length > 0) {
-      updates.technologies = parsed.technologies;
-      newAutoFilled.technologies = true;
-    }
-    if (parsed.rate !== null) {
-      updates.rate = parsed.rate;
-      updates.rateDisplay = parsed.rateDisplay || `${parsed.rate}€/day`;
-      newAutoFilled.rate = true;
-    }
-    if (parsed.location) {
-      updates.location = parsed.location;
-      newAutoFilled.location = true;
-    }
-    if (parsed.remotePolicy) {
-      updates.remotePolicy = parsed.remotePolicy;
-      newAutoFilled.remotePolicy = true;
-    }
+      setForm((prev) => ({ ...prev, ...updates }));
+      setAutoFilled(newAutoFilled);
+      setParseSource(source);
 
-    setForm((prev) => ({ ...prev, ...updates }));
-    setAutoFilled(newAutoFilled);
-    setParseSource("auto");
+      const count = Object.values(newAutoFilled).filter(Boolean).length;
+      return count;
+    },
+    [],
+  );
 
-    const count = Object.values(newAutoFilled).filter(Boolean).length;
-    if (count > 0) {
-      showToast(`Extracted ${count} field${count > 1 ? "s" : ""} from description`, "success");
-    } else {
-      showToast("No fields could be extracted", "info");
+  // Auto-parse text using Rust rule-based parser
+  const autoParseText = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+
+      const parsed = await parseText(text);
+      if (parsed) {
+        const count = applyParsedResult(parsed, "auto");
+        if (count > 0) {
+          showToast(
+            `Extracted ${count} field${count > 1 ? "s" : ""} from description`,
+            "success",
+          );
+        } else {
+          showToast("No fields could be extracted", "info");
+        }
+      }
+    },
+    [parseText, applyParsedResult, showToast],
+  );
+
+  // Handle text arriving from any source
+  const handleTextImported = useCallback(
+    async (text: string) => {
+      setJobDescription(text);
+      await autoParseText(text);
+    },
+    [autoParseText],
+  );
+
+  // URL import
+  const handleUrlImport = async () => {
+    if (!urlInput.trim()) {
+      showToast("Enter a URL first", "error");
+      return;
+    }
+    const text = await fetchUrl(urlInput.trim());
+    if (text) {
+      await handleTextImported(text);
+      showToast("Text imported from URL", "success");
     }
   };
 
+  // File import
+  const handleFileImport = async () => {
+    const text = await readFile();
+    if (text) {
+      await handleTextImported(text);
+      showToast("Text imported from file", "success");
+    }
+  };
+
+  // Manual parse button (for paste mode)
   const handleParse = async () => {
     if (!jobDescription.trim()) {
       showToast("Paste a job description first", "error");
       return;
     }
+    await autoParseText(jobDescription);
+  };
 
-    // Try AI parsing first if enabled
-    if (isAiEnabled) {
-      const aiResult = await parseWithAi(jobDescription);
-
-      if (aiResult) {
-        const newAutoFilled: AutoFilledFields = {
-          technologies: false,
-          rate: false,
-          location: false,
-          remotePolicy: false,
-        };
-        const updates: Partial<typeof form> = {};
-
-        if (aiResult.technologies && aiResult.technologies.length > 0) {
-          updates.technologies = aiResult.technologies;
-          newAutoFilled.technologies = true;
-        }
-        if (aiResult.rate !== null) {
-          updates.rate = aiResult.rate;
-          updates.rateDisplay = `${aiResult.rate}€/day`;
-          newAutoFilled.rate = true;
-        }
-        if (aiResult.location) {
-          updates.location = aiResult.location;
-          newAutoFilled.location = true;
-        }
-        if (aiResult.remotePolicy) {
-          updates.remotePolicy = aiResult.remotePolicy;
-          newAutoFilled.remotePolicy = true;
-        }
-        if (aiResult.client) {
-          updates.client = aiResult.client;
-        }
-        if (aiResult.contactName) {
-          updates.contactName = aiResult.contactName;
-        }
-        if (aiResult.contactInfo) {
-          updates.contactInfo = aiResult.contactInfo;
-        }
-
-        setForm((prev) => ({ ...prev, ...updates }));
-        setAutoFilled(newAutoFilled);
-        setParseSource("ai");
-
-        const count = Object.values(newAutoFilled).filter(Boolean).length;
-        showToast(`AI extracted ${count} field${count > 1 ? "s" : ""}`, "success");
-        return;
-      }
-
-      // AI failed, fall back to regex
-      showToast("AI unavailable, using pattern matching", "info");
+  // Enhance with AI: overwrites auto-parsed fields, fills gaps, preserves nothing from rule parser
+  const handleEnhanceWithAi = async () => {
+    if (!jobDescription.trim()) {
+      showToast("No text to enhance", "error");
+      return;
     }
 
-    applyRegexParse();
+    const aiResult = await parseWithAi(jobDescription);
+    if (!aiResult) {
+      showToast("AI enhancement failed", "error");
+      return;
+    }
+
+    // AI overwrites all fields it has values for — user explicitly asked for AI enhancement
+    const updates: Partial<typeof form> = {};
+    const newAutoFilled = { ...EMPTY_AUTOFILLED };
+    let count = 0;
+
+    if (aiResult.technologies && aiResult.technologies.length > 0) {
+      updates.technologies = aiResult.technologies;
+      newAutoFilled.technologies = true;
+      count++;
+    }
+    if (aiResult.rate !== null) {
+      updates.rate = aiResult.rate;
+      updates.rateDisplay = `${aiResult.rate}€/day`;
+      newAutoFilled.rate = true;
+      count++;
+    }
+    if (aiResult.location) {
+      updates.location = aiResult.location;
+      newAutoFilled.location = true;
+      count++;
+    }
+    if (aiResult.remotePolicy) {
+      updates.remotePolicy = aiResult.remotePolicy;
+      newAutoFilled.remotePolicy = true;
+      count++;
+    }
+    if (aiResult.client) {
+      updates.client = aiResult.client;
+      newAutoFilled.client = true;
+      count++;
+    }
+    if (aiResult.contactName) {
+      updates.contactName = aiResult.contactName;
+      newAutoFilled.contactName = true;
+      count++;
+    }
+    if (aiResult.contactInfo) {
+      updates.contactInfo = aiResult.contactInfo;
+      newAutoFilled.contactInfo = true;
+      count++;
+    }
+
+    if (count > 0) {
+      setForm((prev) => ({ ...prev, ...updates }));
+      setAutoFilled(newAutoFilled);
+      setParseSource("ai");
+      showToast(
+        `AI extracted ${count} field${count > 1 ? "s" : ""}`,
+        "success",
+      );
+    } else {
+      showToast("AI could not extract any fields", "info");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -278,7 +260,6 @@ export default function QuickCapturePage() {
 
     setSaving(true);
 
-    // Build payload with auto-generated title
     const payload = {
       client: form.client.trim(),
       title: `Opportunity from ${form.client.trim()}`,
@@ -298,7 +279,6 @@ export default function QuickCapturePage() {
     try {
       await invoke("create_lead", { data: payload });
       showToast("Lead captured!", "success");
-      // Reset form for another entry
       setForm({
         client: "",
         contactName: "",
@@ -313,12 +293,9 @@ export default function QuickCapturePage() {
         remotePolicy: "",
       });
       setJobDescription("");
-      setAutoFilled({
-        technologies: false,
-        rate: false,
-        location: false,
-        remotePolicy: false,
-      });
+      setUrlInput("");
+      setAutoFilled({ ...EMPTY_AUTOFILLED });
+      setParseSource(null);
     } catch {
       showToast("An error occurred", "error");
     }
@@ -351,7 +328,9 @@ export default function QuickCapturePage() {
     };
 
     try {
-      const lead = await invoke<{ id: string }>("create_lead", { data: payload });
+      const lead = await invoke<{ id: string }>("create_lead", {
+        data: payload,
+      });
       showToast("Lead captured!", "success");
       navigate(`/leads/${lead.id}`);
     } catch {
@@ -359,6 +338,16 @@ export default function QuickCapturePage() {
       setSaving(false);
     }
   };
+
+  const badgeClass = (source: ParseSource | null) =>
+    source === "ai"
+      ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300"
+      : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300";
+
+  const badgeLabel = (source: ParseSource | null) =>
+    source === "ai" ? "AI" : "auto";
+
+  const isLoading = importLoading || aiParsing;
 
   return (
     <main className="min-h-screen p-4 sm:p-8">
@@ -377,33 +366,185 @@ export default function QuickCapturePage() {
           </p>
         </header>
 
-        {/* Job Description Parser */}
+        {/* Import Section */}
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Paste Job Description
-          </label>
-          <textarea
-            value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] text-sm"
-            placeholder="Paste the job description here to auto-extract technologies, rate, location..."
-            rows={4}
-          />
-          <button
-            type="button"
-            onClick={handleParse}
-            disabled={aiParsing}
-            className="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-          >
-            {aiParsing ? "AI Parsing..." : isAiEnabled ? "Parse with AI" : "Parse Description"}
-          </button>
+          {/* Input mode tabs */}
+          <div className="flex gap-1 mb-3 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+            {(["paste", "url", "file"] as InputMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setInputMode(mode)}
+                className={`flex-1 py-1.5 px-3 text-sm font-medium rounded-md transition-colors ${
+                  inputMode === mode
+                    ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                }`}
+              >
+                {mode === "paste" && "Paste"}
+                {mode === "url" && "URL"}
+                {mode === "file" && "File"}
+              </button>
+            ))}
+          </div>
+
+          {/* Paste mode */}
+          {inputMode === "paste" && (
+            <>
+              <textarea
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] text-sm"
+                placeholder="Paste the job description here to auto-extract technologies, rate, location..."
+                rows={4}
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleParse}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  {isLoading ? "Parsing..." : "Parse Description"}
+                </button>
+                {isAiEnabled && parseSource === "auto" && (
+                  <button
+                    type="button"
+                    onClick={handleEnhanceWithAi}
+                    disabled={aiParsing}
+                    className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
+                  >
+                    {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* URL mode */}
+          {inputMode === "url" && (
+            <>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="https://example.com/job-posting"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleUrlImport();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleUrlImport}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {importLoading ? "Importing..." : "Import"}
+                </button>
+              </div>
+              {jobDescription && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Imported text (editable)
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] text-sm"
+                    rows={3}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={handleParse}
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                    >
+                      Re-parse
+                    </button>
+                    {isAiEnabled && parseSource === "auto" && (
+                      <button
+                        type="button"
+                        onClick={handleEnhanceWithAi}
+                        disabled={aiParsing}
+                        className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
+                      >
+                        {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* File mode */}
+          {inputMode === "file" && (
+            <>
+              <button
+                type="button"
+                onClick={handleFileImport}
+                disabled={isLoading}
+                className="w-full py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 disabled:opacity-50 transition-colors text-sm font-medium"
+              >
+                {importLoading
+                  ? "Reading file..."
+                  : "Choose File (PDF, TXT, MD)"}
+              </button>
+              {jobDescription && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Extracted text (editable)
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] text-sm"
+                    rows={3}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={handleParse}
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                    >
+                      Re-parse
+                    </button>
+                    {isAiEnabled && parseSource === "auto" && (
+                      <button
+                        type="button"
+                        onClick={handleEnhanceWithAi}
+                        disabled={aiParsing}
+                        className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
+                      >
+                        {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Client - Most important */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Client / Company <span className="text-red-500">*</span>
+              {autoFilled.client && (
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
+                >
+                  {badgeLabel(parseSource)}
+                </span>
+              )}
             </label>
             <input
               type="text"
@@ -418,25 +559,43 @@ export default function QuickCapturePage() {
           {/* Contact Info - Critical for follow-up */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Contact Name
+                {autoFilled.contactName && (
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
+                  >
+                    {badgeLabel(parseSource)}
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 value={form.contactName}
-                onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, contactName: e.target.value })
+                }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Recruiter name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Contact Info
+                {autoFilled.contactInfo && (
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
+                  >
+                    {badgeLabel(parseSource)}
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 value={form.contactInfo}
-                onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, contactInfo: e.target.value })
+                }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Email or phone"
               />
@@ -470,14 +629,19 @@ export default function QuickCapturePage() {
               <input
                 type="date"
                 value={form.nextActionDate}
-                onChange={(e) => setForm({ ...form, nextActionDate: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, nextActionDate: e.target.value })
+                }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
           {/* Parsed Fields Section */}
-          {(form.technologies.length > 0 || form.rate !== null || form.location || form.remotePolicy) && (
+          {(form.technologies.length > 0 ||
+            form.rate !== null ||
+            form.location ||
+            form.remotePolicy) && (
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
               <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
                 Extracted from description (review and edit)
@@ -489,8 +653,10 @@ export default function QuickCapturePage() {
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Technologies
                     {autoFilled.technologies && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
-                        {parseSource === "ai" ? "AI" : "auto"}
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
+                      >
+                        {badgeLabel(parseSource)}
                       </span>
                     )}
                   </label>
@@ -506,7 +672,9 @@ export default function QuickCapturePage() {
                           onClick={() =>
                             setForm((prev) => ({
                               ...prev,
-                              technologies: prev.technologies.filter((t) => t !== tech),
+                              technologies: prev.technologies.filter(
+                                (t) => t !== tech,
+                              ),
                             }))
                           }
                           className="text-gray-400 hover:text-red-500 text-xs"
@@ -526,21 +694,33 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Rate (€/day)
                       {autoFilled.rate && (
-                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
-                          {parseSource === "ai" ? "AI" : "auto"}
+                        <span
+                          className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
+                        >
+                          {badgeLabel(parseSource)}
                         </span>
                       )}
                     </label>
                     <input
                       type="number"
                       value={form.rate}
-                      onChange={(e) => setForm({ ...form, rate: e.target.value ? parseInt(e.target.value, 10) : null })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          rate: e.target.value
+                            ? parseInt(e.target.value, 10)
+                            : null,
+                        })
+                      }
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 600"
                     />
-                    {form.rateDisplay && form.rateDisplay !== `${form.rate}€/day` && (
-                      <p className="text-[10px] text-gray-500 mt-0.5">Parsed: {form.rateDisplay}</p>
-                    )}
+                    {form.rateDisplay &&
+                      form.rateDisplay !== `${form.rate}€/day` && (
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          Parsed: {form.rateDisplay}
+                        </p>
+                      )}
                   </div>
                 )}
                 {form.location && (
@@ -548,15 +728,19 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Location
                       {autoFilled.location && (
-                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
-                          {parseSource === "ai" ? "AI" : "auto"}
+                        <span
+                          className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
+                        >
+                          {badgeLabel(parseSource)}
                         </span>
                       )}
                     </label>
                     <input
                       type="text"
                       value={form.location}
-                      onChange={(e) => setForm({ ...form, location: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, location: e.target.value })
+                      }
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -566,14 +750,18 @@ export default function QuickCapturePage() {
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Remote
                       {autoFilled.remotePolicy && (
-                        <span className={`text-[10px] px-1 py-0.5 rounded ${parseSource === "ai" ? "bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300" : "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"}`}>
-                          {parseSource === "ai" ? "AI" : "auto"}
+                        <span
+                          className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
+                        >
+                          {badgeLabel(parseSource)}
                         </span>
                       )}
                     </label>
                     <select
                       value={form.remotePolicy}
-                      onChange={(e) => setForm({ ...form, remotePolicy: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, remotePolicy: e.target.value })
+                      }
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="full-remote">Full Remote</option>
@@ -623,7 +811,8 @@ export default function QuickCapturePage() {
 
         {/* Tip */}
         <p className="mt-6 text-xs text-center text-gray-500">
-          Tip: Add full job details later when the email arrives
+          Tip: Import from URL or file, or paste — the parser extracts details
+          instantly
         </p>
       </div>
     </main>

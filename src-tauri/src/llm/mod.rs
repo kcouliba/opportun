@@ -29,6 +29,7 @@ impl LlmState {
         let settings = self.read_settings()?;
 
         if !settings.enabled {
+            log::warn!("[LLM] generate called but AI is not enabled");
             return Err(LlmError::NotEnabled);
         }
 
@@ -39,6 +40,11 @@ impl LlmState {
             request.max_tokens = settings.max_tokens;
         }
 
+        log::info!(
+            "[LLM] generate: model={}, url={}, json_mode={}, temp={}, max_tokens={}",
+            settings.model_name, settings.ollama_url, request.json_mode, request.temperature, request.max_tokens
+        );
+
         let provider = OllamaProvider::new(settings.ollama_url.clone());
         provider
             .generate_with_model(&settings.model_name, request)
@@ -47,8 +53,15 @@ impl LlmState {
 
     pub async fn is_available(&self) -> bool {
         match self.make_provider() {
-            Ok(provider) => provider.is_available().await,
-            Err(_) => false,
+            Ok(provider) => {
+                let avail = provider.is_available().await;
+                log::info!("[LLM] is_available: {}", avail);
+                avail
+            }
+            Err(e) => {
+                log::error!("[LLM] is_available: failed to create provider: {}", e);
+                false
+            }
         }
     }
 

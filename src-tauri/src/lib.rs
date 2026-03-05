@@ -77,6 +77,11 @@ pub fn run() {
             commands::ai::generate_cover_letter_ai,
             commands::ai::generate_interview_prep_ai,
             commands::ai::pull_ai_model,
+            // Import
+            commands::import::fetch_url_text,
+            commands::import::read_file_text,
+            commands::import::parse_job_text,
+            commands::import::parse_profile_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -16,6 +16,9 @@ export interface Profile {
   domains: string | null; // JSON array
   blacklistedClients: string | null; // JSON array
   blacklistedDomains: string | null; // JSON array
+  bio: string | null;
+  languages: string | null; // JSON array
+  education: string | null; // JSON array of EducationEntry
 }
 
 export interface Mission {
@@ -230,4 +233,32 @@ export interface AiStatus {
   enabled: boolean;
   available: boolean;
   modelName: string;
+}
+
+export interface EducationEntry {
+  school: string;
+  degree: string | null;
+  field: string | null;
+  endYear: string | null;
+}
+
+export interface ParsedMission {
+  client: string;
+  title: string;
+  description: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface ParsedProfileData {
+  name: string | null;
+  title: string | null;
+  bio: string | null;
+  yearsExperience: number | null;
+  location: string | null;
+  technologies: string[] | null;
+  domains: string[] | null;
+  languages: string[] | null;
+  education: EducationEntry[] | null;
+  missions: ParsedMission[] | null;
 }

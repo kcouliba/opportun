@@ -3,7 +3,7 @@ use crate::llm::{self, LlmState};
 use crate::llm::provider::{LlmError, LlmRequest};
 use crate::models::{
     AiSettings, AiSettingsInput, Document, InterviewPrep, Lead, LeadAnalysis,
-    ParsedJobDescription, Profile,
+    Mission, ParsedJobDescription, Profile,
 };
 
 #[derive(serde::Serialize)]
@@ -16,7 +16,10 @@ pub struct AiStatus {
 
 #[tauri::command]
 pub fn get_ai_settings(db: tauri::State<'_, Database>) -> Result<AiSettings, String> {
-    Ok(llm::load_settings_from_db(&db))
+    log::info!("[AI] get_ai_settings called");
+    let settings = llm::load_settings_from_db(&db);
+    log::info!("[AI] get_ai_settings → enabled={}, model={}", settings.enabled, settings.model_name);
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -25,6 +28,7 @@ pub fn update_ai_settings(
     llm: tauri::State<'_, LlmState>,
     data: AiSettingsInput,
 ) -> Result<AiSettings, String> {
+    log::info!("[AI] update_ai_settings called with: {:?}", data);
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Build dynamic update
@@ -72,22 +76,29 @@ pub fn update_ai_settings(
         *settings = new_settings.clone();
     }
 
+    log::info!("[AI] update_ai_settings → enabled={}, model={}", new_settings.enabled, new_settings.model_name);
     Ok(new_settings)
 }
 
 #[tauri::command]
 pub async fn check_ai_status(llm: tauri::State<'_, LlmState>) -> Result<AiStatus, String> {
+    log::info!("[AI] check_ai_status called");
     let (enabled, model_name) = {
         let settings = llm.settings.read().map_err(|e| e.to_string())?;
         (settings.enabled, settings.model_name.clone())
     };
 
     let available = if enabled {
-        llm.is_available().await
+        log::info!("[AI] check_ai_status: AI enabled, checking Ollama availability...");
+        let avail = llm.is_available().await;
+        log::info!("[AI] check_ai_status: Ollama available={}", avail);
+        avail
     } else {
+        log::info!("[AI] check_ai_status: AI disabled");
         false
     };
 
+    log::info!("[AI] check_ai_status → enabled={}, available={}, model={}", enabled, available, model_name);
     Ok(AiStatus {
         enabled,
         available,
@@ -100,26 +111,63 @@ pub async fn parse_job_ai(
     llm: tauri::State<'_, LlmState>,
     text: String,
 ) -> Result<ParsedJobDescription, LlmError> {
+    log::info!("[AI] parse_job_ai called, text length={}", text.len());
+
     let request = LlmRequest {
         system_prompt: llm::prompts::JOB_PARSING_SYSTEM.to_string(),
         user_prompt: text,
-        temperature: 0.0, // Will use settings default
-        max_tokens: 0,    // Will use settings default
+        temperature: 0.0,
+        max_tokens: 0,
         json_mode: true,
     };
 
-    let response = llm.generate(request).await?;
+    log::info!("[AI] parse_job_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!(
+                "[AI] parse_job_ai: LLM responded in {}ms, tokens={:?}, content length={}",
+                r.duration_ms, r.tokens_used, r.content.len()
+            );
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] parse_job_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
 
-    let cleaned = llm::clean_json_response(&response.content)?;
+    log::debug!("[AI] parse_job_ai: raw response: {}", response.content);
 
-    serde_json::from_str::<ParsedJobDescription>(&cleaned)
-        .map_err(|e| LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+    let cleaned = match llm::clean_json_response(&response.content) {
+        Ok(c) => {
+            log::info!("[AI] parse_job_ai: JSON cleaned, length={}", c.len());
+            c
+        }
+        Err(e) => {
+            log::error!("[AI] parse_job_ai: JSON cleaning failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    match serde_json::from_str::<ParsedJobDescription>(&cleaned) {
+        Ok(parsed) => {
+            log::info!(
+                "[AI] parse_job_ai: parsed successfully — title={:?}, techs={:?}, rate={:?}, location={:?}",
+                parsed.title, parsed.technologies, parsed.rate, parsed.location
+            );
+            Ok(parsed)
+        }
+        Err(e) => {
+            log::error!("[AI] parse_job_ai: JSON deserialization failed: {} — cleaned JSON: {}", e, cleaned);
+            Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+        }
+    }
 }
 
 fn fetch_lead_and_profile(
     db: &tauri::State<'_, Database>,
     lead_id: &str,
-) -> Result<(Lead, Profile), LlmError> {
+) -> Result<(Lead, Profile, Vec<Mission>), LlmError> {
     let conn = db.conn.lock().map_err(|e| {
         LlmError::InferenceFailed(format!("DB lock failed: {}", e))
     })?;
@@ -168,7 +216,7 @@ fn fetch_lead_and_profile(
         .query_row(
             "SELECT id, createdAt, updatedAt, name, title, yearsExperience, legalStructure,
                     minimumTjm, targetTjm, preferredLocations, maxCommuteDays, technologies,
-                    domains, blacklistedClients, blacklistedDomains
+                    domains, blacklistedClients, blacklistedDomains, bio, languages, education
              FROM \"Profile\" LIMIT 1",
             [],
             |row| {
@@ -188,21 +236,60 @@ fn fetch_lead_and_profile(
                     domains: row.get(12)?,
                     blacklisted_clients: row.get(13)?,
                     blacklisted_domains: row.get(14)?,
+                    bio: row.get(15)?,
+                    languages: row.get(16)?,
+                    education: row.get(17)?,
                 })
             },
         )
         .map_err(|e| LlmError::InferenceFailed(format!("Profile not found: {}", e)))?;
 
-    Ok((lead, profile))
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, createdAt, updatedAt, client, title, description, startDate, endDate, rate, daysPerWeek, status, profileId
+             FROM \"Mission\" WHERE profileId = ?1 ORDER BY startDate DESC",
+        )
+        .map_err(|e| LlmError::InferenceFailed(format!("Mission query failed: {}", e)))?;
+
+    let missions = stmt
+        .query_map([&profile.id], |row| {
+            Ok(Mission {
+                id: row.get(0)?,
+                created_at: row.get(1)?,
+                updated_at: row.get(2)?,
+                client: row.get(3)?,
+                title: row.get(4)?,
+                description: row.get(5)?,
+                start_date: row.get(6)?,
+                end_date: row.get(7)?,
+                rate: row.get(8)?,
+                days_per_week: row.get(9)?,
+                status: row.get(10)?,
+                profile_id: row.get(11)?,
+            })
+        })
+        .map_err(|e| LlmError::InferenceFailed(format!("Mission query failed: {}", e)))?
+        .filter_map(|r| r.ok())
+        .collect::<Vec<_>>();
+
+    Ok((lead, profile, missions))
 }
 
-fn build_user_prompt(profile: &Profile, lead: &Lead) -> String {
+fn build_user_prompt(profile: &Profile, lead: &Lead, missions: &[Mission]) -> String {
     let profile_text = llm::prompts::format_profile_for_prompt(profile);
     let lead_text = llm::prompts::format_lead_for_prompt(lead);
-    format!(
-        "## Freelancer Profile\n{}\n\n## Job Opportunity\n{}",
-        profile_text, lead_text
-    )
+    let missions_text = llm::prompts::format_missions_for_prompt(missions);
+    if missions_text.is_empty() {
+        format!(
+            "## Freelancer Profile\n{}\n\n## Job Opportunity\n{}",
+            profile_text, lead_text
+        )
+    } else {
+        format!(
+            "## Freelancer Profile\n{}\n\n## Professional Experience\n{}\n\n## Job Opportunity\n{}",
+            profile_text, missions_text, lead_text
+        )
+    }
 }
 
 fn save_document(
@@ -287,8 +374,12 @@ pub async fn analyze_lead_ai(
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
 ) -> Result<LeadAnalysis, LlmError> {
-    let (lead, profile) = fetch_lead_and_profile(&db, &lead_id)?;
-    let user_prompt = build_user_prompt(&profile, &lead);
+    log::info!("[AI] analyze_lead_ai called for lead_id={}", lead_id);
+
+    let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
+    log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+
+    let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
         system_prompt: llm::prompts::LEAD_ANALYSIS_SYSTEM.to_string(),
@@ -298,11 +389,36 @@ pub async fn analyze_lead_ai(
         json_mode: true,
     };
 
-    let response = llm.generate(request).await?;
-    let cleaned = llm::clean_json_response(&response.content)?;
+    log::info!("[AI] analyze_lead_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!("[AI] analyze_lead_ai: LLM responded in {}ms, tokens={:?}", r.duration_ms, r.tokens_used);
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] analyze_lead_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
 
-    serde_json::from_str::<LeadAnalysis>(&cleaned)
-        .map_err(|e| LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+    let cleaned = match llm::clean_json_response(&response.content) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("[AI] analyze_lead_ai: JSON cleaning failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    match serde_json::from_str::<LeadAnalysis>(&cleaned) {
+        Ok(analysis) => {
+            log::info!("[AI] analyze_lead_ai: parsed successfully — fit={}", analysis.overall_fit);
+            Ok(analysis)
+        }
+        Err(e) => {
+            log::error!("[AI] analyze_lead_ai: JSON deserialization failed: {} — cleaned JSON: {}", e, cleaned);
+            Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+        }
+    }
 }
 
 #[tauri::command]
@@ -311,8 +427,12 @@ pub async fn generate_cover_letter_ai(
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
 ) -> Result<Document, LlmError> {
-    let (lead, profile) = fetch_lead_and_profile(&db, &lead_id)?;
-    let user_prompt = build_user_prompt(&profile, &lead);
+    log::info!("[AI] generate_cover_letter_ai called for lead_id={}", lead_id);
+
+    let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
+    log::info!("[AI] generate_cover_letter_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+
+    let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
         system_prompt: llm::prompts::COVER_LETTER_SYSTEM.to_string(),
@@ -322,10 +442,31 @@ pub async fn generate_cover_letter_ai(
         json_mode: false,
     };
 
-    let response = llm.generate(request).await?;
-    let content = response.content.trim().to_string();
+    log::info!("[AI] generate_cover_letter_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!("[AI] generate_cover_letter_ai: LLM responded in {}ms, tokens={:?}, content length={}", r.duration_ms, r.tokens_used, r.content.len());
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] generate_cover_letter_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
 
-    save_document(&db, &lead_id, "cover_letter", &content)
+    let content = response.content.trim().to_string();
+    log::info!("[AI] generate_cover_letter_ai: saving document...");
+
+    match save_document(&db, &lead_id, "cover_letter", &content) {
+        Ok(doc) => {
+            log::info!("[AI] generate_cover_letter_ai: saved document id={}", doc.id);
+            Ok(doc)
+        }
+        Err(e) => {
+            log::error!("[AI] generate_cover_letter_ai: save failed: {}", e);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -334,8 +475,12 @@ pub async fn generate_interview_prep_ai(
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
 ) -> Result<Document, LlmError> {
-    let (lead, profile) = fetch_lead_and_profile(&db, &lead_id)?;
-    let user_prompt = build_user_prompt(&profile, &lead);
+    log::info!("[AI] generate_interview_prep_ai called for lead_id={}", lead_id);
+
+    let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
+    log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+
+    let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
         system_prompt: llm::prompts::INTERVIEW_PREP_SYSTEM.to_string(),
@@ -349,22 +494,54 @@ pub async fn generate_interview_prep_ai(
     // malformed JSON when the structured output is large (interview prep has 7
     // nested fields). Retry once on parse failure before surfacing the error.
     let mut last_err = None;
-    for _ in 0..2 {
-        let response = llm.generate(request.clone()).await?;
-        let cleaned = match llm::clean_json_response(&response.content) {
-            Ok(c) => c,
-            Err(e) => { last_err = Some(e); continue; }
-        };
-        match serde_json::from_str::<InterviewPrep>(&cleaned) {
-            Ok(prep) => {
-                let markdown = format_interview_prep_as_markdown(&prep, &lead.client, &lead.title);
-                return save_document(&db, &lead_id, "interview_prep", &markdown);
+    for attempt in 0..2 {
+        log::info!("[AI] generate_interview_prep_ai: attempt {} — sending request to LLM...", attempt + 1);
+        let response = match llm.generate(request.clone()).await {
+            Ok(r) => {
+                log::info!("[AI] generate_interview_prep_ai: attempt {} — LLM responded in {}ms, tokens={:?}", attempt + 1, r.duration_ms, r.tokens_used);
+                r
             }
             Err(e) => {
+                log::error!("[AI] generate_interview_prep_ai: attempt {} — LLM generation failed: {}", attempt + 1, e);
+                return Err(e);
+            }
+        };
+
+        let cleaned = match llm::clean_json_response(&response.content) {
+            Ok(c) => {
+                log::info!("[AI] generate_interview_prep_ai: attempt {} — JSON cleaned, length={}", attempt + 1, c.len());
+                c
+            }
+            Err(e) => {
+                log::error!("[AI] generate_interview_prep_ai: attempt {} — JSON cleaning failed: {}", attempt + 1, e);
+                last_err = Some(e);
+                continue;
+            }
+        };
+
+        match serde_json::from_str::<InterviewPrep>(&cleaned) {
+            Ok(prep) => {
+                log::info!("[AI] generate_interview_prep_ai: parsed successfully, saving document...");
+                let markdown = format_interview_prep_as_markdown(&prep, &lead.client, &lead.title);
+                match save_document(&db, &lead_id, "interview_prep", &markdown) {
+                    Ok(doc) => {
+                        log::info!("[AI] generate_interview_prep_ai: saved document id={}", doc.id);
+                        return Ok(doc);
+                    }
+                    Err(e) => {
+                        log::error!("[AI] generate_interview_prep_ai: save failed: {}", e);
+                        return Err(e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("[AI] generate_interview_prep_ai: attempt {} — JSON deserialization failed: {} — cleaned JSON: {}", attempt + 1, e, cleaned);
                 last_err = Some(LlmError::InvalidJson(format!("{}: {}", e, cleaned)));
             }
         }
     }
+
+    log::error!("[AI] generate_interview_prep_ai: all attempts failed");
     Err(last_err.unwrap_or_else(|| LlmError::InferenceFailed("Interview prep generation failed".to_string())))
 }
 
@@ -374,5 +551,15 @@ pub async fn pull_ai_model(
     app_handle: tauri::AppHandle,
     model_name: String,
 ) -> Result<(), LlmError> {
-    llm.pull_model(app_handle, &model_name).await
+    log::info!("[AI] pull_ai_model called for model={}", model_name);
+    match llm.pull_model(app_handle, &model_name).await {
+        Ok(()) => {
+            log::info!("[AI] pull_ai_model: completed for model={}", model_name);
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("[AI] pull_ai_model: failed for model={}: {}", model_name, e);
+            Err(e)
+        }
+    }
 }

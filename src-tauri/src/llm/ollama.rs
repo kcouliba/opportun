@@ -70,6 +70,10 @@ impl OllamaProvider {
         request: LlmRequest,
     ) -> Result<LlmResponse, LlmError> {
         let start = Instant::now();
+        let url = format!("{}/api/generate", self.base_url);
+
+        log::info!("[Ollama] POST {} — model={}, json_mode={}, temp={}, max_tokens={}", url, model, request.json_mode, request.temperature, request.max_tokens);
+        log::debug!("[Ollama] system_prompt length={}, user_prompt length={}", request.system_prompt.len(), request.user_prompt.len());
 
         let body = GenerateRequest {
             model: model.to_string(),
@@ -89,23 +93,29 @@ impl OllamaProvider {
 
         let resp = self
             .client
-            .post(format!("{}/api/generate", self.base_url))
+            .post(&url)
             .json(&body)
             .send()
             .await
             .map_err(|e| {
                 if e.is_timeout() {
+                    log::error!("[Ollama] Request timed out after 120s");
                     LlmError::Timeout(120)
                 } else if e.is_connect() {
+                    log::error!("[Ollama] Connection failed to {} — is Ollama running?", self.base_url);
                     LlmError::OllamaUnavailable
                 } else {
+                    log::error!("[Ollama] Request failed: {}", e);
                     LlmError::InferenceFailed(e.to_string())
                 }
             })?;
 
         let status = resp.status();
+        log::info!("[Ollama] Response status: {}", status);
+
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
+            log::error!("[Ollama] Error response: {}", text);
             if text.contains("not found") {
                 return Err(LlmError::ModelNotFound(model.to_string()));
             }
@@ -118,22 +128,42 @@ impl OllamaProvider {
         let gen_resp: GenerateResponse = resp
             .json()
             .await
-            .map_err(|e| LlmError::InferenceFailed(e.to_string()))?;
+            .map_err(|e| {
+                log::error!("[Ollama] Failed to parse JSON response: {}", e);
+                LlmError::InferenceFailed(e.to_string())
+            })?;
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        log::info!(
+            "[Ollama] Completed in {}ms — tokens={:?}, response length={}",
+            elapsed, gen_resp.eval_count, gen_resp.response.len()
+        );
 
         Ok(LlmResponse {
             content: gen_resp.response,
             tokens_used: gen_resp.eval_count,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: elapsed,
         })
     }
 
     pub async fn is_available(&self) -> bool {
-        self.client
+        log::info!("[Ollama] Checking availability at {}", self.base_url);
+        match self
+            .client
             .get(&self.base_url)
             .timeout(std::time::Duration::from_secs(3))
             .send()
             .await
-            .is_ok()
+        {
+            Ok(resp) => {
+                log::info!("[Ollama] Available — status: {}", resp.status());
+                true
+            }
+            Err(e) => {
+                log::warn!("[Ollama] Unavailable — {}", e);
+                false
+            }
+        }
     }
 
     #[allow(dead_code)]
