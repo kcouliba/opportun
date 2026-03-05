@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { useAiAnalysis } from "@/hooks/useAiAnalysis";
+import type { Document } from "@/types/index";
 
 const fitColors: Record<string, string> = {
   Excellent: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
@@ -7,8 +9,19 @@ const fitColors: Record<string, string> = {
   Poor: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-export default function LeadAnalysisCard({ leadId }: { leadId: string }) {
-  const { analysis, analyzeLead, analyzing, error } = useAiAnalysis();
+export default function LeadAnalysisCard({ leadId, documents }: { leadId: string; documents: Document[] }) {
+  const { analysis, analyzeLead, analyzing, error, loadSavedAnalysis } = useAiAnalysis();
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    const hasSaved = loadSavedAnalysis(documents);
+    if (!hasSaved) {
+      analyzeLead(leadId);
+    }
+  }, [leadId, documents, loadSavedAnalysis, analyzeLead]);
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">

@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
@@ -47,10 +47,15 @@ export default function QuickCapturePage() {
   const { showToast } = useToast();
   const { isAiEnabled } = useAiSettings();
   const { parseWithAi, parsing: aiParsing } = useAiParse();
-  const { fetchUrl, readFile, parseText, loading: importLoading } = useImport();
+  const { fetchUrl, readFile, parseText, loading: importLoading, error: importError } = useImport();
+
+  const [searchParams] = useSearchParams();
+  const fileAutoOpened = useRef(false);
 
   const [saving, setSaving] = useState(false);
-  const [inputMode, setInputMode] = useState<InputMode>("paste");
+  const [inputMode, setInputMode] = useState<InputMode>(
+    searchParams.get("mode") === "file" ? "file" : "paste",
+  );
   const [jobDescription, setJobDescription] = useState("");
   const [urlInput, setUrlInput] = useState("");
   const [parseSource, setParseSource] = useState<ParseSource | null>(null);
@@ -172,6 +177,26 @@ export default function QuickCapturePage() {
       showToast("Text imported from file", "success");
     }
   };
+
+  // Show import errors as toasts (e.g. image-based PDFs)
+  useEffect(() => {
+    if (importError) {
+      showToast(importError, "error");
+    }
+  }, [importError, showToast]);
+
+  // Auto-open file dialog when navigated with ?mode=file
+  useEffect(() => {
+    if (searchParams.get("mode") === "file" && !fileAutoOpened.current) {
+      fileAutoOpened.current = true;
+      readFile().then((text) => {
+        if (text) {
+          handleTextImported(text);
+          showToast("Text imported from file", "success");
+        }
+      });
+    }
+  }, [searchParams, readFile, handleTextImported, showToast]);
 
   // Manual parse button (for paste mode)
   const handleParse = async () => {

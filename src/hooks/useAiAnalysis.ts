@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { LeadAnalysis } from "@/types/index";
+import type { LeadAnalysis, Document } from "@/types/index";
 
 export function useAiAnalysis() {
   const [analysis, setAnalysis] = useState<LeadAnalysis | null>(null);
@@ -24,10 +24,26 @@ export function useAiAnalysis() {
     }
   }, []);
 
+  const loadSavedAnalysis = useCallback((documents: Document[]): boolean => {
+    const analysisDoc = documents
+      .filter((d) => d.type === "lead_analysis")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+
+    if (!analysisDoc) return false;
+
+    try {
+      const parsed = JSON.parse(analysisDoc.content) as LeadAnalysis;
+      setAnalysis(parsed);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setAnalysis(null);
     setError(null);
   }, []);
 
-  return { analysis, analyzeLead, analyzing, error, reset };
+  return { analysis, analyzeLead, analyzing, error, reset, loadSavedAnalysis };
 }

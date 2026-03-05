@@ -31,6 +31,7 @@ interface Lead {
   notes: string | null;
   nextAction: string | null;
   nextActionDate: string | null;
+  contentLanguage: string | null;
   createdAt: string;
   documents: Document[];
   activities: Activity[];
@@ -41,6 +42,9 @@ interface Document {
   type: string;
   content: string;
   createdAt: string;
+  updatedAt: string;
+  version: number;
+  leadId: string;
 }
 
 interface Activity {
@@ -116,6 +120,7 @@ export default function LeadDetailPage() {
     contactName: "",
     contactInfo: "",
     notes: "",
+    contentLanguage: "",
   });
   const [techInput, setTechInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
@@ -141,6 +146,7 @@ export default function LeadDetailPage() {
           contactName: data.contactName || "",
           contactInfo: data.contactInfo || "",
           notes: data.notes || "",
+          contentLanguage: data.contentLanguage || "",
         });
         setLoading(false);
       })
@@ -182,6 +188,7 @@ export default function LeadDetailPage() {
       requiredTechnologies: JSON.stringify(form.requiredTechnologies),
       requiredDomains: JSON.stringify(form.requiredDomains),
       estimatedStartDate: form.estimatedStartDate || null,
+      contentLanguage: form.contentLanguage || null,
       stage: lead?.stage,
     };
 
@@ -207,6 +214,7 @@ export default function LeadDetailPage() {
     cover_letter: "Cover Letter",
     key_questions: "Key Questions",
     interview_prep: "Interview Prep",
+    lead_analysis: "Lead Analysis",
   };
 
   const generateDocument = async (type: string) => {
@@ -636,6 +644,19 @@ export default function LeadDetailPage() {
                 </Field>
               </div>
 
+              {/* Content Language */}
+              <Field label="Content Language" hint="Override profile default for AI content">
+                <select
+                  value={form.contentLanguage}
+                  onChange={(e) => setForm({ ...form, contentLanguage: e.target.value })}
+                  className="input w-48"
+                >
+                  <option value="">Profile Default</option>
+                  <option value="FR">Français</option>
+                  <option value="EN">English</option>
+                </select>
+              </Field>
+
               {/* Notes */}
               <Field label="Notes">
                 <textarea
@@ -716,6 +737,12 @@ export default function LeadDetailPage() {
                     <dt className="text-gray-500">Source</dt>
                     <dd className="font-medium capitalize">{lead.source}</dd>
                   </div>
+                  {lead.contentLanguage && (
+                    <div>
+                      <dt className="text-gray-500">Content Language</dt>
+                      <dd className="font-medium">{lead.contentLanguage === "FR" ? "Français" : "English"}</dd>
+                    </div>
+                  )}
                 </dl>
               </section>
 
@@ -997,8 +1024,8 @@ export default function LeadDetailPage() {
               </section>
 
               {/* AI Analysis */}
-              {isAiEnabled && id && (
-                <LeadAnalysisCard leadId={id} />
+              {id && (
+                <LeadAnalysisCard leadId={id} documents={lead.documents} />
               )}
 
               {/* Contact */}
@@ -1095,11 +1122,12 @@ export default function LeadDetailPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
         {label}
+        {hint && <span className="font-normal text-gray-500 ml-2">({hint})</span>}
       </label>
       {children}
     </div>

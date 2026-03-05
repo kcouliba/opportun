@@ -108,7 +108,8 @@ pub fn read_file_text(path: String) -> Result<String, String> {
         let trimmed = text.trim().to_string();
         if trimmed.is_empty() {
             return Err(
-                "No text found in PDF. It may be a scanned/image PDF that requires OCR."
+                "This PDF contains no extractable text — it's likely a screenshot or scanned document. \
+                 Try importing via URL instead, or paste the job description text directly."
                     .into(),
             );
         }

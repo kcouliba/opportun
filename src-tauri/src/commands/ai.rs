@@ -177,7 +177,8 @@ fn fetch_lead_and_profile(
             "SELECT id, createdAt, updatedAt, source, sourceUrl, client, title, description,
                     requiredTechnologies, requiredDomains, location, remotePolicy, offeredRate,
                     estimatedRevenue, estimatedStartDate, estimatedDuration, stage, matchScore,
-                    autoFiltered, notes, contactName, contactInfo, nextAction, nextActionDate, profileId
+                    autoFiltered, notes, contactName, contactInfo, nextAction, nextActionDate, profileId,
+                    contentLanguage
              FROM \"Lead\" WHERE id = ?",
             [lead_id],
             |row| {
@@ -207,6 +208,7 @@ fn fetch_lead_and_profile(
                     next_action: row.get(22)?,
                     next_action_date: row.get(23)?,
                     profile_id: row.get(24)?,
+                    content_language: row.get(25)?,
                 })
             },
         )
@@ -216,7 +218,8 @@ fn fetch_lead_and_profile(
         .query_row(
             "SELECT id, createdAt, updatedAt, name, title, yearsExperience, legalStructure,
                     minimumTjm, targetTjm, preferredLocations, maxCommuteDays, technologies,
-                    domains, blacklistedClients, blacklistedDomains, bio, languages, education
+                    domains, blacklistedClients, blacklistedDomains, bio, languages, education,
+                    contentLanguage
              FROM \"Profile\" LIMIT 1",
             [],
             |row| {
@@ -239,6 +242,7 @@ fn fetch_lead_and_profile(
                     bio: row.get(15)?,
                     languages: row.get(16)?,
                     education: row.get(17)?,
+                    content_language: row.get(18)?,
                 })
             },
         )
@@ -273,6 +277,13 @@ fn fetch_lead_and_profile(
         .collect::<Vec<_>>();
 
     Ok((lead, profile, missions))
+}
+
+fn resolve_content_language(profile: &Profile, lead: &Lead) -> String {
+    lead.content_language
+        .clone()
+        .or_else(|| profile.content_language.clone())
+        .unwrap_or_else(|| "FR".to_string())
 }
 
 fn build_user_prompt(profile: &Profile, lead: &Lead, missions: &[Mission]) -> String {
@@ -379,10 +390,11 @@ pub async fn analyze_lead_ai(
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
+    let lang = resolve_content_language(&profile, &lead);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
-        system_prompt: llm::prompts::LEAD_ANALYSIS_SYSTEM.to_string(),
+        system_prompt: format!("{}\n\n{}", llm::prompts::LEAD_ANALYSIS_SYSTEM, llm::prompts::language_instruction(&lang)),
         user_prompt,
         temperature: 0.0,
         max_tokens: 0,
@@ -412,6 +424,12 @@ pub async fn analyze_lead_ai(
     match serde_json::from_str::<LeadAnalysis>(&cleaned) {
         Ok(analysis) => {
             log::info!("[AI] analyze_lead_ai: parsed successfully — fit={}", analysis.overall_fit);
+
+            // Persist analysis as a Document so it survives navigation
+            let json_content = serde_json::to_string_pretty(&analysis)
+                .map_err(|e| LlmError::InvalidJson(e.to_string()))?;
+            save_document(&db, &lead_id, "lead_analysis", &json_content)?;
+
             Ok(analysis)
         }
         Err(e) => {
@@ -432,10 +450,11 @@ pub async fn generate_cover_letter_ai(
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] generate_cover_letter_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
+    let lang = resolve_content_language(&profile, &lead);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
-        system_prompt: llm::prompts::COVER_LETTER_SYSTEM.to_string(),
+        system_prompt: format!("{}\n\n{}", llm::prompts::COVER_LETTER_SYSTEM, llm::prompts::language_instruction(&lang)),
         user_prompt,
         temperature: 0.5,
         max_tokens: 0,
@@ -480,10 +499,11 @@ pub async fn generate_interview_prep_ai(
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
+    let lang = resolve_content_language(&profile, &lead);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
-        system_prompt: llm::prompts::INTERVIEW_PREP_SYSTEM.to_string(),
+        system_prompt: format!("{}\n\n{}", llm::prompts::INTERVIEW_PREP_SYSTEM, llm::prompts::language_instruction(&lang)),
         user_prompt,
         temperature: 0.0,
         max_tokens: 4096,
