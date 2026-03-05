@@ -24,6 +24,7 @@ interface ProfileForm {
   bio: string;
   languages: string[];
   education: EducationEntry[];
+  contentLanguage: string;
 }
 
 const defaultProfile: ProfileForm = {
@@ -42,6 +43,7 @@ const defaultProfile: ProfileForm = {
   bio: "",
   languages: [],
   education: [],
+  contentLanguage: "FR",
 };
 
 /** Merge parsed data into profile: fill empty scalars, union-dedupe arrays */
@@ -132,6 +134,7 @@ export default function ProfilePage() {
             bio: data.bio ?? "",
             languages: data.languages ? JSON.parse(data.languages) : [],
             education: data.education ? JSON.parse(data.education) : [],
+            contentLanguage: data.contentLanguage ?? "FR",
           });
         }
         setLoading(false);
@@ -523,6 +526,16 @@ export default function ProfilePage() {
                 <option value="EURL">EURL</option>
                 <option value="EI">EI</option>
                 <option value="Auto-entrepreneur">Auto-entrepreneur</option>
+              </select>
+            </Field>
+            <Field label="Content Language" hint="Default language for AI-generated content">
+              <select
+                value={profile.contentLanguage}
+                onChange={(e) => setProfile({ ...profile, contentLanguage: e.target.value })}
+                className="input w-40"
+              >
+                <option value="FR">Français</option>
+                <option value="EN">English</option>
               </select>
             </Field>
           </Section>

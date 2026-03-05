@@ -19,6 +19,7 @@ export interface Profile {
   bio: string | null;
   languages: string | null; // JSON array
   education: string | null; // JSON array of EducationEntry
+  contentLanguage: string | null;
 }
 
 export interface Mission {
@@ -62,6 +63,7 @@ export interface Lead {
   nextAction: string | null;
   nextActionDate: string | null;
   profileId: string;
+  contentLanguage: string | null;
 }
 
 export interface LeadWithRelations extends Lead {

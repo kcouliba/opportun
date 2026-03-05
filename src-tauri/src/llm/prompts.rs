@@ -104,6 +104,13 @@ Rules:
 - Be specific — reference actual technologies, rates, and domains from the data
 - Only return valid JSON, no markdown fences"#;
 
+pub fn language_instruction(lang: &str) -> String {
+    match lang {
+        "FR" => "IMPORTANT: Write your entire response in French.".to_string(),
+        _ => "IMPORTANT: Write your entire response in English.".to_string(),
+    }
+}
+
 pub fn format_profile_for_prompt(profile: &Profile) -> String {
     let mut parts = vec![format!("Name: {}", profile.name)];
 

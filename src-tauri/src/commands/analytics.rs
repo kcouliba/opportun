@@ -33,6 +33,7 @@ fn row_to_lead(row: &rusqlite::Row) -> rusqlite::Result<Lead> {
         next_action: row.get("nextAction")?,
         next_action_date: row.get("nextActionDate")?,
         profile_id: row.get("profileId")?,
+        content_language: row.get("contentLanguage")?,
     })
 }
 

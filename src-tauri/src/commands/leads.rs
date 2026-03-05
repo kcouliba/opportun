@@ -46,6 +46,7 @@ fn row_to_lead(row: &rusqlite::Row) -> rusqlite::Result<Lead> {
         next_action: row.get("nextAction")?,
         next_action_date: row.get("nextActionDate")?,
         profile_id: row.get("profileId")?,
+        content_language: row.get("contentLanguage")?,
     })
 }
 
@@ -352,13 +353,15 @@ pub fn create_lead(db: State<Database>, data: LeadInput) -> Result<Lead, String>
             \"client\", \"title\", \"description\", \"requiredTechnologies\", \"requiredDomains\",
             \"location\", \"remotePolicy\", \"offeredRate\", \"estimatedRevenue\",
             \"estimatedStartDate\", \"estimatedDuration\", \"stage\", \"matchScore\", \"autoFiltered\",
-            \"notes\", \"contactName\", \"contactInfo\", \"nextAction\", \"nextActionDate\", \"profileId\"
+            \"notes\", \"contactName\", \"contactInfo\", \"nextAction\", \"nextActionDate\", \"profileId\",
+            \"contentLanguage\"
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5,
             ?6, ?7, ?8, ?9, ?10,
             ?11, ?12, ?13, ?14,
             ?15, ?16, ?17, ?18, ?19,
-            ?20, ?21, ?22, ?23, ?24, ?25
+            ?20, ?21, ?22, ?23, ?24, ?25,
+            ?26
         )",
         rusqlite::params![
             id,
@@ -388,6 +391,7 @@ pub fn create_lead(db: State<Database>, data: LeadInput) -> Result<Lead, String>
             data.next_action,
             data.next_action_date,
             profile.id,
+            data.content_language,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -466,8 +470,8 @@ pub fn update_lead(db: State<Database>, id: String, data: LeadInput) -> Result<L
             \"requiredTechnologies\" = ?12, \"requiredDomains\" = ?13,
             \"contactName\" = ?14, \"contactInfo\" = ?15, \"notes\" = ?16,
             \"stage\" = ?17, \"nextAction\" = ?18, \"nextActionDate\" = ?19,
-            \"matchScore\" = ?20, \"autoFiltered\" = ?21
-        WHERE \"id\" = ?22",
+            \"matchScore\" = ?20, \"autoFiltered\" = ?21, \"contentLanguage\" = ?22
+        WHERE \"id\" = ?23",
         rusqlite::params![
             now,
             data.client,
@@ -490,6 +494,7 @@ pub fn update_lead(db: State<Database>, id: String, data: LeadInput) -> Result<L
             data.next_action_date,
             match_score,
             if auto_filtered { 1i64 } else { 0i64 },
+            data.content_language,
             id,
         ],
     )

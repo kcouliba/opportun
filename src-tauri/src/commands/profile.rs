@@ -29,6 +29,7 @@ pub fn get_profile(db: State<Database>) -> Result<Option<Profile>, String> {
                 bio: row.get("bio")?,
                 languages: row.get("languages")?,
                 education: row.get("education")?,
+                content_language: row.get("contentLanguage")?,
             })
         })
         .ok();
@@ -46,8 +47,8 @@ pub fn create_profile(db: State<Database>, data: ProfileInput) -> Result<Profile
     let now = chrono::Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO Profile (id, createdAt, updatedAt, name, title, yearsExperience, legalStructure, minimumTJM, targetTJM, preferredLocations, maxCommuteDays, technologies, domains, blacklistedClients, blacklistedDomains, bio, languages, education)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        "INSERT INTO Profile (id, createdAt, updatedAt, name, title, yearsExperience, legalStructure, minimumTJM, targetTJM, preferredLocations, maxCommuteDays, technologies, domains, blacklistedClients, blacklistedDomains, bio, languages, education, contentLanguage)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         rusqlite::params![
             id,
             now,
@@ -66,7 +67,8 @@ pub fn create_profile(db: State<Database>, data: ProfileInput) -> Result<Profile
             data.blacklisted_domains,
             data.bio,
             data.languages,
-            data.education
+            data.education,
+            data.content_language
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -83,7 +85,7 @@ pub fn update_profile(db: State<Database>, data: ProfileInput) -> Result<Profile
     let id = data.id.as_ref().ok_or("Profile ID required for update")?;
 
     conn.execute(
-        "UPDATE Profile SET updatedAt=?1, name=?2, title=?3, yearsExperience=?4, legalStructure=?5, minimumTJM=?6, targetTJM=?7, preferredLocations=?8, maxCommuteDays=?9, technologies=?10, domains=?11, blacklistedClients=?12, blacklistedDomains=?13, bio=?14, languages=?15, education=?16 WHERE id=?17",
+        "UPDATE Profile SET updatedAt=?1, name=?2, title=?3, yearsExperience=?4, legalStructure=?5, minimumTJM=?6, targetTJM=?7, preferredLocations=?8, maxCommuteDays=?9, technologies=?10, domains=?11, blacklistedClients=?12, blacklistedDomains=?13, bio=?14, languages=?15, education=?16, contentLanguage=?17 WHERE id=?18",
         rusqlite::params![
             now,
             data.name,
@@ -101,6 +103,7 @@ pub fn update_profile(db: State<Database>, data: ProfileInput) -> Result<Profile
             data.bio,
             data.languages,
             data.education,
+            data.content_language,
             id
         ],
     )

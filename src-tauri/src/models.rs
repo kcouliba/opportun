@@ -23,6 +23,7 @@ pub struct Profile {
     pub bio: Option<String>,
     pub languages: Option<String>,
     pub education: Option<String>,
+    pub content_language: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -70,6 +71,7 @@ pub struct Lead {
     pub next_action: Option<String>,
     pub next_action_date: Option<String>,
     pub profile_id: String,
+    pub content_language: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -147,6 +149,7 @@ pub struct ProfileInput {
     pub bio: Option<String>,
     pub languages: Option<String>,
     pub education: Option<String>,
+    pub content_language: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,6 +186,7 @@ pub struct LeadInput {
     pub next_action: Option<String>,
     pub next_action_date: Option<String>,
     pub stage: Option<String>,
+    pub content_language: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
