@@ -2,26 +2,39 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import type { Mission } from "@/types/index";
 
 export default function MissionsPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(null);
     invoke<Mission[]>("list_missions")
       .then((data) => {
         setMissions(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        setError(typeof err === "string" ? err : "Failed to load missions");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const activeMission = missions.find((m) => m.status === "active");
   const pastMissions = missions.filter((m) => m.status !== "active");
 
   if (loading) {
     return <PageLoader />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={loadData} />;
   }
 
   return (

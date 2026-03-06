@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import type { Profile, Mission, Lead, FollowUpLead, DashboardForecast, DashboardAlert } from "@/types";
 
 interface DashboardData {
@@ -85,8 +86,11 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [forecast, setForecast] = useState<DashboardForecast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(null);
     Promise.all([
       invoke<Profile | null>("get_profile"),
       invoke<Mission[]>("list_missions"),
@@ -99,11 +103,20 @@ export default function DashboardPage() {
         setForecast(forecastData);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        setError(typeof err === "string" ? err : "Failed to load dashboard");
+        setLoading(false);
+      });
+  };
 
-  if (loading || !data) {
+  useEffect(() => { loadData(); }, []);
+
+  if (loading) {
     return <PageLoader />;
+  }
+
+  if (error || !data) {
+    return <ErrorState message={error || "Failed to load dashboard"} onRetry={loadData} />;
   }
 
   const isSetUp = data.hasProfile;

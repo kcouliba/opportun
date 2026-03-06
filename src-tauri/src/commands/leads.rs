@@ -91,7 +91,7 @@ fn is_valid_sort_field(field: &str) -> bool {
 }
 
 /// Case-insensitive search across lead text fields
-fn matches_search(lead: &Lead, term: &str) -> bool {
+pub(crate) fn matches_search(lead: &Lead, term: &str) -> bool {
     let term_lower = term.to_lowercase();
     let fields: Vec<Option<&str>> = vec![
         Some(lead.client.as_str()),
@@ -132,7 +132,7 @@ fn json_array_to_display(json: &Option<String>) -> String {
 }
 
 /// Build the filtered lead query and return matching leads
-fn query_leads_filtered(
+pub(crate) fn query_leads_filtered(
     conn: &rusqlite::Connection,
     filters: &LeadFilters,
 ) -> Result<Vec<Lead>, String> {
@@ -758,4 +758,87 @@ pub fn export_leads_csv(db: State<Database>, filters: LeadFilters) -> Result<Str
     }
 
     Ok(csv_rows.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+
+    fn setup_db_with_profile_and_leads() -> Database {
+        let db = Database::in_memory().expect("in_memory DB");
+        let conn = db.conn.lock().unwrap();
+
+        // Create a profile
+        conn.execute(
+            "INSERT INTO \"Profile\" (\"id\", \"createdAt\", \"updatedAt\", \"name\", \"technologies\", \"domains\")
+             VALUES ('p1', '2024-01-01', '2024-01-01', 'Test User', '[\"React\",\"Rust\"]', '[\"Fintech\"]')",
+            [],
+        ).unwrap();
+
+        // Create test leads
+        let leads = vec![
+            ("l1", "Acme Corp", "Frontend Developer", "lead", 85),
+            ("l2", "Beta Inc", "Backend Developer", "qualified", 60),
+            ("l3", "Gamma LLC", "Fullstack Engineer", "negotiating", 45),
+        ];
+
+        for (id, client, title, stage, score) in leads {
+            conn.execute(
+                "INSERT INTO \"Lead\" (\"id\", \"createdAt\", \"updatedAt\", \"source\", \"client\", \"title\", \"stage\", \"matchScore\", \"autoFiltered\", \"profileId\")
+                 VALUES (?1, '2024-01-01', '2024-01-01', 'recruiter', ?2, ?3, ?4, ?5, 0, 'p1')",
+                rusqlite::params![id, client, title, stage, score],
+            ).unwrap();
+        }
+
+        drop(conn);
+        db
+    }
+
+    #[test]
+    fn query_leads_returns_all() {
+        let db = setup_db_with_profile_and_leads();
+        let conn = db.conn.lock().unwrap();
+        let filters = LeadFilters::default();
+        let leads = query_leads_filtered(&conn, &filters).unwrap();
+        assert_eq!(leads.len(), 3);
+    }
+
+    #[test]
+    fn filter_by_stage() {
+        let db = setup_db_with_profile_and_leads();
+        let conn = db.conn.lock().unwrap();
+        let filters = LeadFilters {
+            stage: Some("qualified".to_string()),
+            ..Default::default()
+        };
+        let leads = query_leads_filtered(&conn, &filters).unwrap();
+        assert_eq!(leads.len(), 1);
+        assert_eq!(leads[0].client, "Beta Inc");
+    }
+
+    #[test]
+    fn filter_by_min_score() {
+        let db = setup_db_with_profile_and_leads();
+        let conn = db.conn.lock().unwrap();
+        let filters = LeadFilters {
+            min_score: Some(70),
+            ..Default::default()
+        };
+        let leads = query_leads_filtered(&conn, &filters).unwrap();
+        assert_eq!(leads.len(), 1);
+        assert_eq!(leads[0].client, "Acme Corp");
+    }
+
+    #[test]
+    fn matches_search_finds_client_and_title() {
+        let db = setup_db_with_profile_and_leads();
+        let conn = db.conn.lock().unwrap();
+        let filters = LeadFilters::default();
+        let leads = query_leads_filtered(&conn, &filters).unwrap();
+
+        assert!(matches_search(&leads[0], "Acme"));
+        assert!(matches_search(&leads[0], "frontend"));
+        assert!(!matches_search(&leads[0], "nonexistent"));
+    }
 }

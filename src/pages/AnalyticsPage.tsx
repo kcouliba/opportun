@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import type { AnalyticsData } from "@/types/index";
 
 const stageLabels: Record<string, string> = {
@@ -16,34 +17,28 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(null);
     invoke<AnalyticsData>("get_analytics")
-      .then((data) => {
-        setData(data);
+      .then((result) => {
+        setData(result);
         setLoading(false);
       })
       .catch((err) => {
         setError(typeof err === "string" ? err : "Failed to fetch analytics");
         setLoading(false);
       });
-  }, []);
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   if (loading) {
     return <PageLoader />;
   }
 
   if (error || !data) {
-    return (
-      <main className="min-h-screen p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center py-12 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <p className="text-red-600 dark:text-red-400">
-              {error || "Failed to load analytics"}
-            </p>
-          </div>
-        </div>
-      </main>
-    );
+    return <ErrorState message={error || "Failed to load analytics"} onRetry={loadData} />;
   }
 
   const maxMonthlyCount = Math.max(...data.monthlyLeadCount.map((m) => m.count), 1);

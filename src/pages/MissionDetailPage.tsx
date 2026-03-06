@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import type { Mission } from "@/types/index";
 
 export default function MissionDetailPage() {
@@ -11,6 +12,7 @@ export default function MissionDetailPage() {
   const { showToast } = useToast();
   const [mission, setMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -27,8 +29,10 @@ export default function MissionDetailPage() {
     status: "active",
   });
 
-  useEffect(() => {
+  const loadData = () => {
     if (!id) return;
+    setLoading(true);
+    setError(null);
     invoke<Mission>("get_mission", { id })
       .then((data) => {
         setMission(data);
@@ -44,8 +48,13 @@ export default function MissionDetailPage() {
         });
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [id]);
+      .catch((err) => {
+        setError(typeof err === "string" ? err : "Failed to load mission");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => { loadData(); }, [id]);
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -101,6 +110,10 @@ export default function MissionDetailPage() {
 
   if (loading) {
     return <PageLoader />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={loadData} />;
   }
 
   if (!mission) {

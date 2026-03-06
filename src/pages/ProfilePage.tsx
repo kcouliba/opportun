@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import { useProfileImport } from "@/hooks/useProfileImport";
 import FileDropZone from "@/components/FileDropZone";
 import { toWslPath, validateFileExtension } from "@/lib/wslPath";
@@ -94,6 +95,7 @@ export default function ProfilePage() {
   const { showToast } = useToast();
   const [profile, setProfile] = useState<ProfileForm>(defaultProfile);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [techInput, setTechInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
@@ -109,7 +111,9 @@ export default function ProfilePage() {
 
   const { importFromFile, importFromPath, importFromText, loading: importing, error: importError } = useProfileImport();
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(null);
     invoke<Profile | null>("get_profile")
       .then((data) => {
         if (data) {
@@ -135,8 +139,13 @@ export default function ProfilePage() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        setError(typeof err === "string" ? err : "Failed to load profile");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const applyImport = (data: ParsedProfileData) => {
     setProfile((prev) => mergeImportData(prev, data));
@@ -281,6 +290,10 @@ export default function ProfilePage() {
 
   if (loading) {
     return <PageLoader />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={loadData} />;
   }
 
   return (

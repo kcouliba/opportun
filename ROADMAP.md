@@ -5,40 +5,44 @@
 ## Current State (v0.2.0)
 
 **What works:**
-- 11 pages: Dashboard, Leads (list/detail/new/quick-capture), Missions (list/detail/new), Activities, Analytics, Profile
+- 12 pages: Dashboard, Leads (list/kanban/detail/new/quick-capture), Missions (list/detail/new), Activities, Analytics, Profile, Settings
 - Full CRUD on all entities with SQLite backend
 - Lead match scoring (tech/domain/rate/location/blacklist)
 - Local AI via Ollama — job parsing, lead analysis, cover letter generation, interview prep
+- AI task queue — serialized requests with progress in status bar
 - Lead analysis persists as Document, auto-triggers on lead create, loads from cache on revisit
 - File import from Leads list (PDF/TXT/MD via Quick Capture)
 - Content language setting (FR/EN) on profile with per-lead override for AI-generated content
 - LinkedIn profile import (PDF upload or paste) with mission extraction and selection wizard
 - Document generation (AI-powered cover letters, interview prep, template-based key questions)
 - CSV export, search with debounce, pagination
+- Database backup (VACUUM INTO) and restore (SQLite backup API) from Settings
+- Kanban board view with drag-and-drop between pipeline stages
+- Startup alerts (in-app toasts) for overdue follow-ups and ending missions
+- Income forecasting dashboard with 6-month projection and intelligent alerts
+- Error boundaries per page with fallback UI
+- Dynamic lead sources management in Settings
 - MCP server with 18 tools (direct SQLite)
 - Dark mode, responsive layout, toast notifications
 
 **What's missing:**
-- No CI/CD or release automation
-- No error boundaries or retry logic
-- Testing limited to matching algorithm (28 Vitest + 7 Rust tests)
-- Desktop features underutilized (notifications registered but unused, no app menu)
+- No release automation (CI runs on push/PR)
+- Desktop features underutilized (no app menu, no keyboard shortcuts)
 - No accessibility (0 aria labels)
-- No database backup/restore
 - No embedded LLM runtime (Ollama required for AI features)
 
 ---
 
-## Phase 1 — Stability & Quality
+## Phase 1 — Stability & Quality ✓
 
 _Foundation work before adding features._
 
-- [ ] **Error boundaries** — React error boundary wrapping App + per-page boundaries with fallback UI
-- [ ] **Retry on failure** — Show retry button when backend calls fail instead of just a toast
-- [ ] **README** — Setup instructions, dev workflow, architecture overview
-- [ ] **GitHub Actions CI** — Run `npm run check` + `npm run test:all` on push/PR
-- [ ] **Component tests** — Cover critical flows (Dashboard data loading, LeadDetail edit/delete, ProfilePage save)
-- [ ] **Rust command tests** — Test commands with in-memory SQLite
+- [x] **Error boundaries** — React error boundary wrapping App + per-page boundaries with fallback UI
+- [x] **Retry on failure** — ErrorState component with retry button on all 6 data-fetching pages
+- [x] **README** — Architecture diagram, dev workflow, testing guide, expanded project structure
+- [x] **GitHub Actions CI** — Lint + type-check + clippy + vitest + cargo test on push/PR
+- [x] **Component tests** — 10 tests: DashboardPage (4), LeadDetailPage (3), ProfilePage (3) with Tauri mock infrastructure
+- [x] **Rust command tests** — 8 tests: db migrations (2), leads filtering/search (4), backup validation (2) with in-memory SQLite
 
 ---
 
@@ -84,16 +88,16 @@ Config: user picks model in Settings, stored in DB
 
 ---
 
-## Phase 3 — Daily Essentials
+## Phase 3 — Daily Essentials ✓
 
 _High-impact features for daily pipeline management._
 
-- [ ] **Database backup/restore** — Export full DB as file, restore from backup (via dialog). Data safety is non-negotiable.
-- [ ] **Follow-up reminders** — Desktop notifications when a lead's next action date arrives (plugin already registered but unused)
-- [ ] **System notifications** — Notify on app startup when a mission ends within 30 days
-- [ ] **Kanban board view** — Drag-and-drop leads between pipeline stages (alternate view to list). Pipeline management is visual by nature.
-- [ ] **Error boundaries** — React error boundary wrapping App + per-page boundaries with fallback UI (moved up from Phase 1 if not done)
-- [ ] **AI task queue** — Serialize AI requests, prevent overlapping calls, show progress in a status bar
+- [x] **Database backup/restore** — Export full DB (VACUUM INTO), restore via SQLite backup API, validate before import
+- [x] **Follow-up reminders** — In-app toasts on startup for overdue and due-today follow-ups
+- [x] **System notifications** — Startup alerts when a mission ends within 30 days
+- [x] **Kanban board view** — Drag-and-drop leads between pipeline stages (@hello-pangea/dnd), with list/kanban toggle persisted in localStorage
+- [x] **Error boundaries** — React error boundary wrapping App + per-page boundaries with fallback UI
+- [x] **AI task queue** — Serialize AI requests, prevent overlapping calls, show progress in a status bar
 
 ---
 
@@ -127,7 +131,7 @@ _Leverage Tauri properly — make it feel native and shippable._
 
 _Deeper value for power users._
 
-- [ ] **Revenue dashboard** — Forecast income based on pipeline probability and mission schedule
+- [x] **Revenue dashboard** — Forecast income based on pipeline probability and mission schedule (6-month projection, secured + weighted pipeline income)
 - [ ] **Email template system** — Customizable outreach templates (not just generated cover letters)
 - [ ] **Lead source analytics** — Which sources convert best? Track ROI per source
 - [ ] **Calendar view** — Visualize missions timeline and upcoming activities
@@ -161,4 +165,4 @@ Things explicitly out of scope:
 
 ---
 
-_Last updated: 2026-03-05_
+_Last updated: 2026-03-06_

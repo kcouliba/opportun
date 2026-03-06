@@ -54,3 +54,48 @@ pub fn restore_database(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_database_accepts_valid_db() {
+        // Create a temporary valid database
+        let dir = std::env::temp_dir().join(format!("opportun_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        let db = crate::db::Database::in_memory().expect("in_memory DB");
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            &format!("VACUUM INTO '{}'", db_path.to_str().unwrap()),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = validate_database(db_path.to_str().unwrap().to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn validate_database_rejects_invalid_file() {
+        let dir = std::env::temp_dir().join(format!("opportun_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("invalid.db");
+
+        // Create an empty SQLite database (no tables)
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch("CREATE TABLE dummy (id INTEGER)").unwrap();
+        drop(conn);
+
+        let result = validate_database(db_path.to_str().unwrap().to_string());
+        assert!(result.is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}

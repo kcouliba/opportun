@@ -7,6 +7,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useToast } from "@/components/Toast";
 import { useAiQueue } from "@/components/AiQueue";
 import { PageLoader } from "@/components/LoadingSpinner";
+import { ErrorState } from "@/components/ErrorState";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import LeadAnalysisCard from "@/components/LeadAnalysisCard";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
@@ -86,6 +87,7 @@ export default function LeadDetailPage() {
   const { enqueue } = useAiQueue();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [activeDoc, setActiveDoc] = useState<Document | null>(null);
@@ -128,8 +130,10 @@ export default function LeadDetailPage() {
   const [techInput, setTechInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
 
-  useEffect(() => {
+  const loadData = () => {
     if (!id) return;
+    setLoading(true);
+    setError(null);
     invoke<Lead>("get_lead", { id })
       .then((data) => {
         setLead(data);
@@ -153,8 +157,13 @@ export default function LeadDetailPage() {
         });
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [id]);
+      .catch((err) => {
+        setError(typeof err === "string" ? err : "Failed to load lead details");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => { loadData(); }, [id]);
 
   const updateStage = async (newStage: string) => {
     if (!lead || !id) return;
@@ -404,6 +413,10 @@ export default function LeadDetailPage() {
 
   if (loading) {
     return <PageLoader />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={loadData} />;
   }
 
   if (!lead) {
