@@ -225,6 +225,13 @@ export interface InterviewPrep {
   closingAdvice: string;
 }
 
+export interface ActivityInsight {
+  summary: string;
+  tone: string;
+  keyTopics: string[];
+  nextStepSuggestion: string | null;
+}
+
 export interface DownloadProgress {
   status: string;
   completed: number | null;

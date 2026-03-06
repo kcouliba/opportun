@@ -2,8 +2,8 @@ use crate::db::Database;
 use crate::llm::{self, LlmState};
 use crate::llm::provider::{LlmError, LlmRequest};
 use crate::models::{
-    AiSettings, AiSettingsInput, Document, InterviewPrep, Lead, LeadAnalysis,
-    Mission, ParsedJobDescription, Profile,
+    Activity, ActivityInsight, AiSettings, AiSettingsInput, Document, InterviewPrep,
+    Lead, LeadAnalysis, Mission, ParsedJobDescription, Profile,
 };
 
 #[derive(serde::Serialize)]
@@ -590,6 +590,107 @@ pub async fn pull_ai_model(
         Err(e) => {
             log::error!("[AI] pull_ai_model: failed for model={}: {}", model_name, e);
             Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn analyze_activities_ai(
+    db: tauri::State<'_, Database>,
+    llm: tauri::State<'_, LlmState>,
+    lead_id: String,
+) -> Result<ActivityInsight, LlmError> {
+    log::info!("[AI] analyze_activities_ai called for lead_id={}", lead_id);
+
+    // Fetch activities for the lead
+    let activities = {
+        let conn = db.conn.lock().map_err(|e| {
+            LlmError::InferenceFailed(format!("DB lock failed: {}", e))
+        })?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, createdAt, updatedAt, type, title, description, occurredAt, duration, leadId
+                 FROM \"Activity\" WHERE leadId = ?1 ORDER BY occurredAt DESC",
+            )
+            .map_err(|e| LlmError::InferenceFailed(format!("Activity query failed: {}", e)))?;
+
+        let rows = stmt.query_map([&lead_id], |row| {
+            Ok(Activity {
+                id: row.get(0)?,
+                created_at: row.get(1)?,
+                updated_at: row.get(2)?,
+                activity_type: row.get(3)?,
+                title: row.get(4)?,
+                description: row.get(5)?,
+                occurred_at: row.get(6)?,
+                duration: row.get(7)?,
+                lead_id: row.get(8)?,
+            })
+        })
+        .map_err(|e| LlmError::InferenceFailed(format!("Activity query failed: {}", e)))?;
+        let result: Vec<_> = rows.filter_map(|r| r.ok()).collect();
+        result
+    };
+
+    if activities.is_empty() {
+        return Err(LlmError::InferenceFailed("No activities to analyze".to_string()));
+    }
+
+    let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
+    let lang = resolve_content_language(&profile, &lead);
+    let base_prompt = build_user_prompt(&profile, &lead, &missions);
+    let activities_text = llm::prompts::format_activities_for_prompt(&activities);
+    let user_prompt = format!("{}\n\n## Activities\n{}", base_prompt, activities_text);
+
+    let request = LlmRequest {
+        system_prompt: format!(
+            "{}\n\n{}",
+            llm::prompts::ACTIVITY_INSIGHTS_SYSTEM,
+            llm::prompts::language_instruction(&lang)
+        ),
+        user_prompt,
+        temperature: 0.0,
+        max_tokens: 0,
+        json_mode: true,
+    };
+
+    log::info!("[AI] analyze_activities_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!(
+                "[AI] analyze_activities_ai: LLM responded in {}ms, tokens={:?}",
+                r.duration_ms, r.tokens_used
+            );
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] analyze_activities_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    let cleaned = match llm::clean_json_response(&response.content) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("[AI] analyze_activities_ai: JSON cleaning failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    match serde_json::from_str::<ActivityInsight>(&cleaned) {
+        Ok(insight) => {
+            log::info!("[AI] analyze_activities_ai: parsed successfully — tone={}", insight.tone);
+            let json_content = serde_json::to_string_pretty(&insight)
+                .map_err(|e| LlmError::InvalidJson(e.to_string()))?;
+            save_document(&db, &lead_id, "activity_insights", &json_content)?;
+            Ok(insight)
+        }
+        Err(e) => {
+            log::error!(
+                "[AI] analyze_activities_ai: JSON deserialization failed: {} — cleaned JSON: {}",
+                e, cleaned
+            );
+            Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
         }
     }
 }

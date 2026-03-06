@@ -10,6 +10,7 @@ import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import LeadAnalysisCard from "@/components/LeadAnalysisCard";
+import ActivityInsightsCard from "@/components/ActivityInsightsCard";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
 
 interface Lead {
@@ -802,6 +803,14 @@ export default function LeadDetailPage() {
                     + Add
                   </button>
                 </div>
+
+                {isAiEnabled && id && (lead.activities?.length ?? 0) > 0 && (
+                  <ActivityInsightsCard
+                    leadId={id}
+                    documents={lead.documents}
+                    activities={lead.activities ?? []}
+                  />
+                )}
 
                 {/* Activity Form */}
                 {showActivityForm && (

@@ -78,6 +78,7 @@ pub fn run() {
             commands::ai::generate_cover_letter_ai,
             commands::ai::generate_interview_prep_ai,
             commands::ai::pull_ai_model,
+            commands::ai::analyze_activities_ai,
             // Import
             commands::import::fetch_url_text,
             commands::import::read_file_text,

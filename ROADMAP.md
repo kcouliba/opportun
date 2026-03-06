@@ -29,7 +29,6 @@
 - No release automation (CI runs on push/PR)
 - Desktop features underutilized (no app menu, no keyboard shortcuts)
 - No accessibility (0 aria labels)
-- No embedded LLM runtime (Ollama required for AI features)
 
 ---
 
@@ -53,24 +52,21 @@ _On-device intelligence — private, offline, no API keys required._
 ### Design decisions
 
 - **AI is optional** — App works fully without AI. Current regex parser and templates remain as fallback. AI features are enhancements toggled on in settings.
-- **Dual runtime** — Dev uses Ollama (HTTP to localhost:11434). Release builds embed llama.cpp via Rust bindings. Both use GGUF model format — same models, same prompts, same results.
-- **No bundled model** — Installer stays lightweight (~15MB). Model (~2-4GB) downloads on first AI use, stored in app data dir.
+- **Ollama-based** — AI features use Ollama (HTTP to localhost:11434). User installs Ollama separately and pulls models.
 - **Model-agnostic** — Default suggestion: Llama 3.2 3B. User can switch to Mistral 7B or others in settings. Runtime doesn't care.
 
 ### Architecture
 
 ```
 LlmProvider trait
-├── OllamaProvider  (dev: HTTP to localhost:11434)
-└── EmbeddedProvider (release: llama-cpp-rs, compiled in via cargo feature flag)
+└── OllamaProvider  (HTTP to localhost:11434)
 
-Model storage: ~/.local/share/com.opportun.app/models/
 Config: user picks model in Settings, stored in DB
 ```
 
 ### DONE
 
-- [x] **Local LLM runtime** — `LlmProvider` trait + Ollama backend + settings UI ("Enable AI" toggle, model picker, download progress). Cargo feature `embedded-llm` for release builds with llama-cpp-rs.
+- [x] **Local LLM runtime** — `LlmProvider` trait + Ollama backend + settings UI ("Enable AI" toggle, model picker, download progress).
 - [x] **Job description parsing v2** — Replace regex-based QuickCapture with LLM extraction. Input: raw job post text → Output: structured JSON (title, client, technologies, rate, location, remote policy, requirements). Fallback to current regex if AI disabled.
 - [x] **Smart lead analysis** — AI summary per lead: strengths, risks, talking points, fit assessment beyond numeric score. Persisted as Document, auto-triggers on lead create, loads from cache on revisit.
 - [x] **Cover letter rewrite** — Use local LLM to personalize generated cover letters instead of rigid templates
@@ -80,11 +76,7 @@ Config: user picks model in Settings, stored in DB
 - [x] **Auto-analyze on lead create** — Triggers analysis on first visit to LeadDetail, persists result, loads from cache on revisit
 - [x] **Parse lead from document** — "Import File" button on Leads list, opens Quick Capture in file mode with auto file dialog
 
-### Remaining
-
-- [ ] **Activity insights** — Summarize activity history per lead ("3 calls over 2 weeks, last contact 5 days ago, tone: positive")
-- [ ] **Natural language search** — "Show me remote React leads above 600€/day added this month"
-- [ ] **Rate negotiation helper** — Suggest counter-offers based on market positioning and lead context
+- [x] **Activity insights** — Summarize activity history per lead ("3 calls over 2 weeks, last contact 5 days ago, tone: positive")
 
 ---
 
@@ -106,8 +98,6 @@ _High-impact features for daily pipeline management._
 _Make daily use faster and more pleasant._
 
 - [ ] **Bulk actions** — Select multiple leads to change stage, delete, or export
-- [ ] **CSV/JSON import** — Bulk import leads with validation and duplicate detection
-- [ ] **Saved filters** — Save and recall frequently used lead filter combinations
 - [ ] **Activity quick-add** — Add activity directly from leads list without navigating to detail
 - [ ] **Breadcrumbs** — Show page hierarchy in detail views (Leads > ClientName > Edit)
 - [ ] **Localize application** — i18n support (French/English at minimum). Extract all UI strings, use a translation framework (e.g., react-i18next). Locale follows profile `contentLanguage` setting or system locale.
@@ -118,7 +108,6 @@ _Make daily use faster and more pleasant._
 
 _Leverage Tauri properly — make it feel native and shippable._
 
-- [ ] **Embedded LLM runtime** — llama-cpp-rs for release builds (currently Ollama-only). Only needed for distribution.
 - [ ] **Window state persistence** — Remember window size/position between sessions
 - [ ] **App menu** — File (New Lead, Export), Edit (Undo), View (Dark mode toggle), Help (About, Docs)
 - [ ] **Keyboard shortcuts** — `Ctrl+K` search, `Ctrl+N` new lead, `Ctrl+S` save, `Escape` close/cancel
@@ -135,7 +124,6 @@ _Deeper value for power users._
 - [ ] **Email template system** — Customizable outreach templates (not just generated cover letters)
 - [ ] **Lead source analytics** — Which sources convert best? Track ROI per source
 - [ ] **Calendar view** — Visualize missions timeline and upcoming activities
-- [ ] **Multi-profile support** — Switch between different freelance identities/brands
 - [ ] **Tagging system** — Custom tags on leads for flexible categorization beyond stages
 - [ ] **Document versioning** — Edit and track versions of generated documents
 - [ ] **Data sync** — Optional cloud backup (encrypted) for cross-device access
@@ -148,8 +136,6 @@ _Extend beyond the app._
 
 - [ ] **MCP improvements** — Add document generation, mission management, and profile tools to MCP server
 - [ ] **Browser extension** — Capture leads from job boards (Malt, Crème de la Crème, LinkedIn) with one click
-- [ ] **API mode** — Optional REST API for custom integrations (webhook on stage change, etc.)
-- [ ] **Plugin system** — User-defined scoring rules, custom fields, import adapters
 
 ---
 

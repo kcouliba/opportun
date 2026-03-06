@@ -104,6 +104,44 @@ Rules:
 - Be specific — reference actual technologies, rates, and domains from the data
 - Only return valid JSON, no markdown fences"#;
 
+pub const ACTIVITY_INSIGHTS_SYSTEM: &str = r#"You are a freelance career advisor analyzing activity history for a lead/opportunity. Summarize the communication pattern and engagement level.
+
+Return a JSON object:
+{
+  "summary": "Concise summary of all activities (e.g., '3 calls over 2 weeks, last contact 5 days ago')",
+  "tone": "Positive|Neutral|Cautious|Negative",
+  "keyTopics": ["topic1", "topic2"],
+  "nextStepSuggestion": "Suggested next action based on activity pattern"
+}
+
+Rules:
+- Summary should include counts by type, time span, and recency of last contact
+- Tone should reflect the overall engagement pattern (frequent contact = positive, ghosting = cautious/negative)
+- Key topics should be extracted from activity titles and descriptions
+- Next step should be actionable and specific
+- Only return valid JSON, no markdown fences"#;
+
+pub fn format_activities_for_prompt(activities: &[crate::models::Activity]) -> String {
+    if activities.is_empty() {
+        return String::new();
+    }
+    let mut parts = Vec::new();
+    for a in activities {
+        let mut line = format!("- [{}] {} ({}",  a.activity_type, a.title, a.occurred_at);
+        if let Some(dur) = a.duration {
+            line.push_str(&format!(", {} min", dur));
+        }
+        line.push(')');
+        if let Some(ref desc) = a.description {
+            if !desc.is_empty() {
+                line.push_str(&format!(": {}", desc));
+            }
+        }
+        parts.push(line);
+    }
+    parts.join("\n")
+}
+
 pub fn language_instruction(lang: &str) -> String {
     match lang {
         "FR" => "IMPORTANT: Write your entire response in French.".to_string(),

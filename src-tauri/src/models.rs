@@ -431,6 +431,16 @@ pub struct ParsedProfileData {
     pub missions: Option<Vec<ParsedMission>>,
 }
 
+// Activity insight types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityInsight {
+    pub summary: String,
+    pub tone: String,
+    pub key_topics: Vec<String>,
+    pub next_step_suggestion: Option<String>,
+}
+
 // Startup notification types
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
