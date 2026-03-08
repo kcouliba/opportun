@@ -2,8 +2,9 @@ use crate::db::Database;
 use crate::llm::{self, LlmState};
 use crate::llm::provider::{LlmError, LlmRequest};
 use crate::models::{
-    Activity, ActivityInsight, AiSettings, AiSettingsInput, Document, InterviewPrep,
-    Lead, LeadAnalysis, Mission, ParsedJobDescription, Profile,
+    Activity, ActivityInsight, AiSettings, AiSettingsInput, ApplicationMessageOptions,
+    Document, InterviewPrep, Lead, LeadAnalysis, Mission, ParsedJobDescription,
+    ParsedProfileData, Profile,
 };
 
 #[derive(serde::Serialize)]
@@ -14,6 +15,7 @@ pub struct AiStatus {
     pub model_available: bool,
     pub model_name: String,
     pub local_models: Vec<String>,
+    pub provider: String,
 }
 
 #[tauri::command]
@@ -57,6 +59,14 @@ pub fn update_ai_settings(
         updates.push("maxTokens = ?");
         params.push(Box::new(max_tokens));
     }
+    if let Some(ref provider) = data.provider {
+        updates.push("provider = ?");
+        params.push(Box::new(provider.clone()));
+    }
+    if let Some(ref api_key) = data.api_key {
+        updates.push("apiKey = ?");
+        params.push(Box::new(api_key.clone()));
+    }
 
     if !updates.is_empty() {
         let sql = format!(
@@ -85,34 +95,44 @@ pub fn update_ai_settings(
 #[tauri::command]
 pub async fn check_ai_status(llm: tauri::State<'_, LlmState>) -> Result<AiStatus, String> {
     log::info!("[AI] check_ai_status called");
-    let (enabled, model_name) = {
+    let (enabled, model_name, provider) = {
         let settings = llm.settings.read().map_err(|e| e.to_string())?;
-        (settings.enabled, settings.model_name.clone())
+        (settings.enabled, settings.model_name.clone(), settings.provider.clone())
     };
 
-    let (available, local_models) = if enabled {
-        log::info!("[AI] check_ai_status: AI enabled, checking Ollama availability...");
-        let avail = llm.is_available().await;
-        log::info!("[AI] check_ai_status: Ollama available={}", avail);
-        let models = if avail {
-            llm.list_models().await.unwrap_or_default().into_iter().map(|m| m.name).collect::<Vec<_>>()
-        } else {
-            vec![]
-        };
-        (avail, models)
+    let (available, model_available, local_models) = if enabled {
+        match provider.as_str() {
+            "openai" | "anthropic" => {
+                let avail = llm.is_available().await;
+                log::info!("[AI] check_ai_status: {} available={}", provider, avail);
+                (avail, true, vec![])
+            }
+            _ => {
+                log::info!("[AI] check_ai_status: AI enabled, checking Ollama availability...");
+                let avail = llm.is_available().await;
+                log::info!("[AI] check_ai_status: Ollama available={}", avail);
+                let models = if avail {
+                    llm.list_models().await.unwrap_or_default().into_iter().map(|m| m.name).collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
+                let model_avail = models.iter().any(|m| m == &model_name);
+                (avail, model_avail, models)
+            }
+        }
     } else {
         log::info!("[AI] check_ai_status: AI disabled");
-        (false, vec![])
+        (false, false, vec![])
     };
 
-    let model_available = local_models.iter().any(|m| m == &model_name);
-    log::info!("[AI] check_ai_status → enabled={}, available={}, model_available={}, model={}, local={:?}", enabled, available, model_available, model_name, local_models);
+    log::info!("[AI] check_ai_status → provider={}, enabled={}, available={}, model_available={}, model={}", provider, enabled, available, model_available, model_name);
     Ok(AiStatus {
         enabled,
         available,
         model_available,
         model_name,
         local_models,
+        provider,
     })
 }
 
@@ -169,6 +189,64 @@ pub async fn parse_job_ai(
         }
         Err(e) => {
             log::error!("[AI] parse_job_ai: JSON deserialization failed: {} — cleaned JSON: {}", e, cleaned);
+            Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn parse_resume_ai(
+    llm: tauri::State<'_, LlmState>,
+    text: String,
+) -> Result<ParsedProfileData, LlmError> {
+    log::info!("[AI] parse_resume_ai called, text length={}", text.len());
+
+    let request = LlmRequest {
+        system_prompt: llm::prompts::RESUME_PARSING_SYSTEM.to_string(),
+        user_prompt: text,
+        temperature: 0.0,
+        max_tokens: 0,
+        json_mode: true,
+    };
+
+    log::info!("[AI] parse_resume_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!(
+                "[AI] parse_resume_ai: LLM responded in {}ms, tokens={:?}, content length={}",
+                r.duration_ms, r.tokens_used, r.content.len()
+            );
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] parse_resume_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    log::debug!("[AI] parse_resume_ai: raw response: {}", response.content);
+
+    let cleaned = match llm::clean_json_response(&response.content) {
+        Ok(c) => {
+            log::info!("[AI] parse_resume_ai: JSON cleaned, length={}", c.len());
+            c
+        }
+        Err(e) => {
+            log::error!("[AI] parse_resume_ai: JSON cleaning failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    match serde_json::from_str::<ParsedProfileData>(&cleaned) {
+        Ok(parsed) => {
+            log::info!(
+                "[AI] parse_resume_ai: parsed successfully — name={:?}, techs={:?}",
+                parsed.name, parsed.technologies
+            );
+            Ok(parsed)
+        }
+        Err(e) => {
+            log::error!("[AI] parse_resume_ai: JSON deserialization failed: {} — cleaned JSON: {}", e, cleaned);
             Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
         }
     }
@@ -582,6 +660,12 @@ pub async fn pull_ai_model(
     model_name: String,
 ) -> Result<(), LlmError> {
     log::info!("[AI] pull_ai_model called for model={}", model_name);
+    {
+        let settings = llm.settings.read().map_err(|_| LlmError::InferenceFailed("Failed to read settings".to_string()))?;
+        if settings.provider != "ollama" {
+            return Err(LlmError::InferenceFailed("Model pulling is only supported for Ollama".to_string()));
+        }
+    }
     match llm.pull_model(app_handle, &model_name).await {
         Ok(()) => {
             log::info!("[AI] pull_ai_model: completed for model={}", model_name);
@@ -691,6 +775,79 @@ pub async fn analyze_activities_ai(
                 e, cleaned
             );
             Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn generate_application_message_ai(
+    db: tauri::State<'_, Database>,
+    llm: tauri::State<'_, LlmState>,
+    lead_id: String,
+    options: ApplicationMessageOptions,
+) -> Result<Document, LlmError> {
+    log::info!("[AI] generate_application_message_ai called for lead_id={}", lead_id);
+
+    let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
+    log::info!("[AI] generate_application_message_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+
+    let lang = resolve_content_language(&profile, &lead);
+    let mut user_prompt = build_user_prompt(&profile, &lead, &missions);
+
+    let char_target = options.char_limit.unwrap_or(match options.length_preset.as_str() {
+        "short" => 150,
+        "long" => 1000,
+        _ => 500,
+    });
+
+    user_prompt.push_str(&format!(
+        "\n\n## Message Parameters\n- Target length: ~{} characters\n- Tone: {}",
+        char_target, options.tone
+    ));
+    if let Some(ref focus) = options.custom_focus {
+        if !focus.is_empty() {
+            user_prompt.push_str(&format!("\n- Focus: {}", focus));
+        }
+    }
+
+    let request = LlmRequest {
+        system_prompt: format!(
+            "{}\n\n{}",
+            llm::prompts::APPLICATION_MESSAGE_SYSTEM,
+            llm::prompts::language_instruction(&lang)
+        ),
+        user_prompt,
+        temperature: 0.7,
+        max_tokens: 0,
+        json_mode: false,
+    };
+
+    log::info!("[AI] generate_application_message_ai: sending request to LLM...");
+    let response = match llm.generate(request).await {
+        Ok(r) => {
+            log::info!(
+                "[AI] generate_application_message_ai: LLM responded in {}ms, tokens={:?}, content length={}",
+                r.duration_ms, r.tokens_used, r.content.len()
+            );
+            r
+        }
+        Err(e) => {
+            log::error!("[AI] generate_application_message_ai: LLM generation failed: {}", e);
+            return Err(e);
+        }
+    };
+
+    let content = response.content.trim().to_string();
+    log::info!("[AI] generate_application_message_ai: saving document...");
+
+    match save_document(&db, &lead_id, "application_message", &content) {
+        Ok(doc) => {
+            log::info!("[AI] generate_application_message_ai: saved document id={}", doc.id);
+            Ok(doc)
+        }
+        Err(e) => {
+            log::error!("[AI] generate_application_message_ai: save failed: {}", e);
+            Err(e)
         }
     }
 }

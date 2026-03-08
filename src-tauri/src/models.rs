@@ -238,6 +238,8 @@ pub struct AiSettings {
     pub ollama_url: String,
     pub temperature: f64,
     pub max_tokens: i64,
+    pub provider: String,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,6 +250,28 @@ pub struct AiSettingsInput {
     pub ollama_url: Option<String>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<i64>,
+    pub provider: Option<String>,
+    pub api_key: Option<String>,
+}
+
+fn deserialize_optional_rate<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+    struct RateVisitor;
+    impl<'de> de::Visitor<'de> for RateVisitor {
+        type Value = Option<i64>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a number or null")
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> { Ok(None) }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> { Ok(None) }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> { Ok(Some(v)) }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> { Ok(Some(v as i64)) }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> { Ok(Some(v.round() as i64)) }
+    }
+    deserializer.deserialize_any(RateVisitor)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -256,6 +280,7 @@ pub struct ParsedJobDescription {
     pub title: Option<String>,
     pub client: Option<String>,
     pub technologies: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_optional_rate")]
     pub rate: Option<i64>,
     pub location: Option<String>,
     pub remote_policy: Option<String>,
@@ -439,6 +464,16 @@ pub struct ActivityInsight {
     pub tone: String,
     pub key_topics: Vec<String>,
     pub next_step_suggestion: Option<String>,
+}
+
+// Application message options
+#[derive(Debug, serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplicationMessageOptions {
+    pub length_preset: String,
+    pub char_limit: Option<u32>,
+    pub tone: String,
+    pub custom_focus: Option<String>,
 }
 
 // Startup notification types

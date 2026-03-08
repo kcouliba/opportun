@@ -1,0 +1,2 @@
+ALTER TABLE aiSettings ADD COLUMN provider TEXT NOT NULL DEFAULT 'ollama';
+ALTER TABLE aiSettings ADD COLUMN apiKey TEXT;

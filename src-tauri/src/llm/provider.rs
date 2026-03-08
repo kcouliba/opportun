@@ -5,8 +5,10 @@ use thiserror::Error;
 pub enum LlmError {
     #[error("AI is not enabled")]
     NotEnabled,
-    #[error("Ollama is not running at the configured URL")]
-    OllamaUnavailable,
+    #[error("LLM provider is not available")]
+    ProviderUnavailable,
+    #[error("API key is required for this provider")]
+    ApiKeyMissing,
     #[error("Model '{0}' not found — download it in Settings")]
     ModelNotFound(String),
     #[error("Inference failed: {0}")]

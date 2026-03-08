@@ -103,7 +103,7 @@ impl OllamaProvider {
                     LlmError::Timeout(120)
                 } else if e.is_connect() {
                     log::error!("[Ollama] Connection failed to {} — is Ollama running?", self.base_url);
-                    LlmError::OllamaUnavailable
+                    LlmError::ProviderUnavailable
                 } else {
                     log::error!("[Ollama] Request failed: {}", e);
                     LlmError::InferenceFailed(e.to_string())
@@ -172,7 +172,7 @@ impl OllamaProvider {
             .get(format!("{}/api/tags", self.base_url))
             .send()
             .await
-            .map_err(|_| LlmError::OllamaUnavailable)?;
+            .map_err(|_| LlmError::ProviderUnavailable)?;
 
         let tags: TagsResponse = resp
             .json()
@@ -205,7 +205,7 @@ impl OllamaProvider {
             .timeout(std::time::Duration::from_secs(3600))
             .send()
             .await
-            .map_err(|_| LlmError::OllamaUnavailable)?;
+            .map_err(|_| LlmError::ProviderUnavailable)?;
 
         let mut stream = resp.bytes_stream();
         use futures_util::StreamExt;

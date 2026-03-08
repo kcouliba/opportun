@@ -170,6 +170,8 @@ export interface AiSettings {
   ollamaUrl: string;
   temperature: number;
   maxTokens: number;
+  provider: string;
+  apiKey: string | null;
 }
 
 export interface AiSettingsInput {
@@ -178,6 +180,8 @@ export interface AiSettingsInput {
   ollamaUrl?: string;
   temperature?: number;
   maxTokens?: number;
+  provider?: string;
+  apiKey?: string | null;
 }
 
 export interface ParsedJobDescription {
@@ -232,6 +236,13 @@ export interface ActivityInsight {
   nextStepSuggestion: string | null;
 }
 
+export interface ApplicationMessageOptions {
+  lengthPreset: "short" | "standard" | "long";
+  charLimit?: number;
+  tone: "professional" | "friendly" | "direct";
+  customFocus?: string;
+}
+
 export interface DownloadProgress {
   status: string;
   completed: number | null;
@@ -241,7 +252,10 @@ export interface DownloadProgress {
 export interface AiStatus {
   enabled: boolean;
   available: boolean;
+  modelAvailable: boolean;
   modelName: string;
+  localModels: string[];
+  provider: string;
 }
 
 export interface EducationEntry {
