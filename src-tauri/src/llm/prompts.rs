@@ -51,9 +51,9 @@ Rules:
 - Rate advice should consider their target TJM vs offered rate
 - Only return valid JSON, no markdown fences"#;
 
-pub const COVER_LETTER_SYSTEM: &str = r#"You are a professional cover letter writer for French freelance IT consultants applying to contract opportunities.
+pub const COVER_LETTER_SYSTEM: &str = r#"You are writing a professional cover letter on behalf of the freelancer described in the profile. The letter is addressed TO the hiring company/client — the freelancer is applying for the job.
 
-Write a warm, personalized cover letter based on the freelancer's profile and the job description provided.
+CRITICAL: Write in the FIRST PERSON as the freelancer ("I", "my experience", "I've worked on…"). The letter is FROM the freelancer TO the company, NOT the other way around.
 
 Rules:
 - Use a professional but approachable tone — not stiff or corporate
@@ -120,6 +120,67 @@ Rules:
 - Key topics should be extracted from activity titles and descriptions
 - Next step should be actionable and specific
 - Only return valid JSON, no markdown fences"#;
+
+pub const RESUME_PARSING_SYSTEM: &str = r#"You are a resume/CV parser. Extract structured profile data from the provided resume text.
+
+Return a JSON object with these fields (use null for missing data):
+{
+  "name": "full name",
+  "title": "professional title or headline",
+  "bio": "professional summary or objective (2-3 sentences)",
+  "yearsExperience": 5,
+  "location": "city or region",
+  "technologies": ["tech1", "tech2"],
+  "domains": ["domain1", "domain2"],
+  "languages": ["French", "English"],
+  "education": [
+    {
+      "school": "university name",
+      "degree": "degree type (Master, Bachelor, etc.)",
+      "field": "field of study",
+      "endYear": "2020"
+    }
+  ],
+  "missions": [
+    {
+      "client": "company name",
+      "title": "job title / role",
+      "description": "brief description of responsibilities",
+      "startDate": "YYYY-MM-DD",
+      "endDate": "YYYY-MM-DD or null if current"
+    }
+  ]
+}
+
+Rules:
+- Extract ALL work experiences as missions, ordered chronologically (most recent first)
+- Normalize technology names: "ReactJS" → "React", "node" → "Node.js", "postgres" → "PostgreSQL"
+- For dates with only month/year, use the first day of the month (e.g., "March 2021" → "2021-03-01")
+- For dates with only a year, use January 1st (e.g., "2021" → "2021-01-01")
+- Infer yearsExperience from the earliest work experience if not explicitly stated
+- Domains examples: Fintech, E-commerce, Healthcare, SaaS, Banking, Insurance, Telecom
+- Be thorough with technologies — include frameworks, languages, databases, cloud providers, tools
+- Handle both French and English resumes
+- Only return valid JSON, no markdown fences"#;
+
+pub const APPLICATION_MESSAGE_SYSTEM: &str = r#"You are writing a short, conversational application message on behalf of the freelancer described in the profile. The message is addressed TO the hiring company/client — the freelancer is applying for the job.
+
+CRITICAL: Write in the FIRST PERSON as the freelancer ("I", "my experience", "I've worked on…"). The message is FROM the freelancer TO the company, NOT the other way around.
+
+Rules:
+- Respect the target character count (±10%) — this is critical for platform limits
+- Match the requested tone exactly:
+  * professional: polished but warm, no slang
+  * friendly: casual, approachable, light
+  * direct: concise, straight to the point, no fluff
+- Highlight specific technology matches between the freelancer's profile and the job requirements
+- Include a clear call to action (e.g., "Happy to discuss further", "Available for a quick call")
+- Reference the client/company by name
+- Keep it conversational — NOT a formal cover letter
+- Sign off with the freelancer's name from the profile
+- Output plain text only — no JSON, no markdown, no greeting/signature formatting
+- Do NOT include subject lines or email headers
+- Write as a single flowing message, not paragraphs with headers"#;
 
 pub fn format_activities_for_prompt(activities: &[crate::models::Activity]) -> String {
     if activities.is_empty() {

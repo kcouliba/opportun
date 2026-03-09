@@ -1,6 +1,6 @@
 use crate::db::Database;
 use crate::matching::parse_json_array;
-use crate::models::Document;
+use crate::models::{ApplicationMessageOptions, Document};
 use chrono::Utc;
 use tauri::State;
 
@@ -239,6 +239,158 @@ Suggested questions to ask:
         work_setup_text,
         profile.name,
     )
+}
+
+fn resolve_char_target(options: &ApplicationMessageOptions) -> u32 {
+    options.char_limit.unwrap_or(match options.length_preset.as_str() {
+        "short" => 150,
+        "long" => 1000,
+        _ => 500, // "standard"
+    })
+}
+
+fn generate_application_message_template(
+    profile: &ProfileData,
+    lead: &LeadData,
+    options: &ApplicationMessageOptions,
+) -> String {
+    let target = resolve_char_target(options) as usize;
+    let profile_title = profile.title.as_deref().unwrap_or("Developer");
+
+    let technologies = parse_json_array(&profile.technologies);
+    let required_technologies = parse_json_array(&lead.required_technologies);
+
+    let tech_lower: Vec<String> = technologies.iter().map(|t| t.to_lowercase()).collect();
+    let matching_techs: Vec<&String> = required_technologies
+        .iter()
+        .filter(|t| tech_lower.contains(&t.to_lowercase()))
+        .collect();
+
+    let tech_mention = if !matching_techs.is_empty() {
+        let names: Vec<&str> = matching_techs.iter().take(3).map(|s| s.as_str()).collect();
+        format!("I work with {} daily", names.join(", "))
+    } else if !technologies.is_empty() {
+        let top: Vec<&str> = technologies.iter().take(3).map(|s| s.as_str()).collect();
+        format!("My stack includes {}", top.join(", "))
+    } else {
+        String::new()
+    };
+
+    let experience = match profile.years_experience {
+        Some(y) => format!(" with {}+ years of experience", y),
+        None => String::new(),
+    };
+
+    let focus = options
+        .custom_focus
+        .as_deref()
+        .map(|f| format!(" {}", f))
+        .unwrap_or_default();
+
+    let greeting = match options.tone.as_str() {
+        "friendly" => format!("Hi {} team!", lead.client),
+        "direct" => "Hello,".to_string(),
+        _ => format!("Hello {} team,", lead.client),
+    };
+
+    let cta = match options.tone.as_str() {
+        "friendly" => "Would love to chat if this sounds like a fit!",
+        "direct" => "Available to discuss — let me know.",
+        _ => "I'd welcome the opportunity to discuss this further.",
+    };
+
+    let mut msg = format!(
+        "{}\n\nI'm {}, a {}{}, and I'm interested in the {} role.{} {}.\n\n{}\n\n---\nGenerated template — personalize before sending.",
+        greeting,
+        profile.name,
+        profile_title,
+        experience,
+        lead.title,
+        focus,
+        tech_mention,
+        cta,
+    );
+
+    // Truncate to target if over
+    if msg.len() > target + target / 10 {
+        msg.truncate(target);
+        if let Some(last_space) = msg.rfind(' ') {
+            msg.truncate(last_space);
+        }
+        msg.push_str("...");
+    }
+
+    msg
+}
+
+#[tauri::command]
+pub fn generate_application_message(
+    db: State<Database>,
+    lead_id: String,
+    options: ApplicationMessageOptions,
+) -> Result<Document, String> {
+    let conn = db.conn.lock().unwrap();
+
+    let lead = conn
+        .query_row(
+            "SELECT * FROM \"Lead\" WHERE \"id\" = ?1",
+            rusqlite::params![lead_id],
+            |row| -> rusqlite::Result<LeadData> {
+                Ok(LeadData {
+                    client: row.get("client")?,
+                    title: row.get("title")?,
+                    required_technologies: row.get("requiredTechnologies")?,
+                    remote_policy: row.get("remotePolicy")?,
+                    offered_rate: row.get("offeredRate")?,
+                    estimated_start_date: row.get("estimatedStartDate")?,
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => "Lead not found".to_string(),
+            _ => e.to_string(),
+        })?;
+
+    let profile = conn
+        .query_row(
+            "SELECT * FROM \"Profile\" LIMIT 1",
+            [],
+            |row| -> rusqlite::Result<ProfileData> {
+                Ok(ProfileData {
+                    name: row.get("name")?,
+                    title: row.get("title")?,
+                    years_experience: row.get("yearsExperience")?,
+                    technologies: row.get("technologies")?,
+                    domains: row.get("domains")?,
+                    target_tjm: row.get("targetTJM")?,
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                "No profile found. Please set up your profile first.".to_string()
+            }
+            _ => e.to_string(),
+        })?;
+
+    let content = generate_application_message_template(&profile, &lead, &options);
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT INTO \"Document\" (\"id\", \"createdAt\", \"updatedAt\", \"type\", \"content\", \"version\", \"leadId\")
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)",
+        rusqlite::params![id, now, now, "application_message", content, lead_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        "SELECT * FROM \"Document\" WHERE \"id\" = ?1",
+        rusqlite::params![id],
+        row_to_document,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

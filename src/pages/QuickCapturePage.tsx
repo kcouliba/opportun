@@ -72,12 +72,15 @@ export default function QuickCapturePage() {
 
   const [form, setForm] = useState({
     client: "",
+    title: "",
+    description: "",
     contactName: "",
     contactInfo: "",
     source: "recruiter",
     nextActionDate: tomorrowStr,
     notes: "",
     technologies: [] as string[],
+    domains: [] as string[],
     rate: null as number | null,
     rateDisplay: "",
     location: "",
@@ -118,6 +121,18 @@ export default function QuickCapturePage() {
       if (parsed.contactInfo) {
         updates.contactInfo = parsed.contactInfo;
         newAutoFilled.contactInfo = true;
+      }
+      if (parsed.description) {
+        updates.description = parsed.description;
+        newAutoFilled.description = true;
+      }
+      if (parsed.title) {
+        updates.title = parsed.title;
+        newAutoFilled.title = true;
+      }
+      if (parsed.domains && parsed.domains.length > 0) {
+        updates.domains = parsed.domains;
+        newAutoFilled.domains = true;
       }
 
       setForm((prev) => ({ ...prev, ...updates }));
@@ -295,6 +310,21 @@ export default function QuickCapturePage() {
       newAutoFilled.contactInfo = true;
       count++;
     }
+    if (aiResult.description) {
+      updates.description = aiResult.description;
+      newAutoFilled.description = true;
+      count++;
+    }
+    if (aiResult.title) {
+      updates.title = aiResult.title;
+      newAutoFilled.title = true;
+      count++;
+    }
+    if (aiResult.domains && aiResult.domains.length > 0) {
+      updates.domains = aiResult.domains;
+      newAutoFilled.domains = true;
+      count++;
+    }
 
     if (count > 0) {
       setForm((prev) => ({ ...prev, ...updates }));
@@ -321,15 +351,17 @@ export default function QuickCapturePage() {
 
     const payload = {
       client: form.client.trim(),
-      title: `Opportunity from ${form.client.trim()}`,
+      title: form.title.trim() || `Opportunity from ${form.client.trim()}`,
+      description: form.description || null,
       source: form.source,
+      sourceUrl: urlInput.trim() || null,
       contactName: form.contactName || null,
       contactInfo: form.contactInfo || null,
       nextAction: "Follow up",
       nextActionDate: form.nextActionDate || null,
       notes: form.notes || null,
       requiredTechnologies: JSON.stringify(form.technologies),
-      requiredDomains: "[]",
+      requiredDomains: JSON.stringify(form.domains),
       offeredRate: form.rate || null,
       location: form.location || null,
       remotePolicy: form.remotePolicy || null,
@@ -340,12 +372,15 @@ export default function QuickCapturePage() {
       showToast("Lead captured!", "success");
       setForm({
         client: "",
+        title: "",
+        description: "",
         contactName: "",
         contactInfo: "",
         source: "recruiter",
         nextActionDate: tomorrowStr,
         notes: "",
         technologies: [],
+        domains: [],
         rate: null,
         rateDisplay: "",
         location: "",
@@ -372,15 +407,17 @@ export default function QuickCapturePage() {
 
     const payload = {
       client: form.client.trim(),
-      title: `Opportunity from ${form.client.trim()}`,
+      title: form.title.trim() || `Opportunity from ${form.client.trim()}`,
+      description: form.description || null,
       source: form.source,
+      sourceUrl: urlInput.trim() || null,
       contactName: form.contactName || null,
       contactInfo: form.contactInfo || null,
       nextAction: "Follow up",
       nextActionDate: form.nextActionDate || null,
       notes: form.notes || null,
       requiredTechnologies: JSON.stringify(form.technologies),
-      requiredDomains: "[]",
+      requiredDomains: JSON.stringify(form.domains),
       offeredRate: form.rate || null,
       location: form.location || null,
       remotePolicy: form.remotePolicy || null,

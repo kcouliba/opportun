@@ -67,6 +67,7 @@ pub fn run() {
             commands::activities::delete_activity,
             // Documents
             commands::documents::generate_document,
+            commands::documents::generate_application_message,
             // Analytics
             commands::analytics::get_analytics,
             // AI
@@ -79,6 +80,8 @@ pub fn run() {
             commands::ai::generate_interview_prep_ai,
             commands::ai::pull_ai_model,
             commands::ai::analyze_activities_ai,
+            commands::ai::generate_application_message_ai,
+            commands::ai::parse_resume_ai,
             // Import
             commands::import::fetch_url_text,
             commands::import::read_file_text,

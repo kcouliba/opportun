@@ -96,6 +96,13 @@ export default function LeadDetailPage() {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Application message options
+  const [showMsgOptions, setShowMsgOptions] = useState(false);
+  const [msgLengthPreset, setMsgLengthPreset] = useState<"short" | "standard" | "long">("standard");
+  const [msgCharLimit, setMsgCharLimit] = useState<string>("");
+  const [msgTone, setMsgTone] = useState<"professional" | "friendly" | "direct">("professional");
+  const [msgCustomFocus, setMsgCustomFocus] = useState("");
+
   // Activity state
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -228,6 +235,7 @@ export default function LeadDetailPage() {
     key_questions: "Key Questions",
     interview_prep: "Interview Prep",
     lead_analysis: "Lead Analysis",
+    application_message: "Application Message",
   };
 
   const generateDocument = async (type: string) => {
@@ -263,6 +271,52 @@ export default function LeadDetailPage() {
     setGenerating(null);
   };
 
+  const generateApplicationMessage = async () => {
+    if (!id) return;
+    setGenerating("application_message");
+
+    const options = {
+      lengthPreset: msgLengthPreset,
+      charLimit: msgCharLimit ? parseInt(msgCharLimit, 10) : undefined,
+      tone: msgTone,
+      customFocus: msgCustomFocus || undefined,
+    };
+
+    try {
+      let doc: Document;
+      if (isAiEnabled) {
+        try {
+          doc = await enqueue<Document>(
+            "generate_application_message_ai",
+            { leadId: id, options },
+            "Generating application message"
+          );
+        } catch (aiErr) {
+          console.warn("AI application message failed, falling back to template:", aiErr);
+          doc = await invoke<Document>("generate_application_message", {
+            leadId: id,
+            options,
+          });
+        }
+      } else {
+        doc = await invoke<Document>("generate_application_message", {
+          leadId: id,
+          options,
+        });
+      }
+
+      if (lead) {
+        setLead({ ...lead, documents: [...lead.documents, doc] });
+        setActiveDoc(doc);
+      }
+      showToast("Application message generated");
+    } catch (err) {
+      console.error("Application message generation failed:", err);
+      showToast("Failed to generate application message", "error");
+    }
+    setGenerating(null);
+  };
+
   const copyToClipboard = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -276,7 +330,7 @@ export default function LeadDetailPage() {
 
   const handleSaveDocument = async (doc: Document) => {
     if (!lead) return;
-    const ext = doc.type === "cover_letter" ? "txt" : "md";
+    const ext = doc.type === "cover_letter" || doc.type === "application_message" ? "txt" : "md";
 
     const filePath = await save({
       defaultPath: `${lead.client}-${doc.type}.${ext}`,
@@ -1037,6 +1091,77 @@ export default function LeadDetailPage() {
                         : "Interview Prep"}
                     </button>
                   )}
+
+                  {/* Application Message */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+                    <button
+                      onClick={() => setShowMsgOptions(!showMsgOptions)}
+                      className="w-full py-2 px-4 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                      disabled={generating !== null}
+                    >
+                      {generating === "application_message"
+                        ? "Generating..."
+                        : isAiEnabled
+                        ? "Application Message (AI)"
+                        : "Application Message"}
+                      <span className="text-xs">{showMsgOptions ? "\u25B2" : "\u25BC"}</span>
+                    </button>
+                    {showMsgOptions && (
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Length</label>
+                          <select
+                            value={msgLengthPreset}
+                            onChange={(e) => setMsgLengthPreset(e.target.value as "short" | "standard" | "long")}
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
+                          >
+                            <option value="short">Short (~150 chars)</option>
+                            <option value="standard">Standard (~500 chars)</option>
+                            <option value="long">Long (~1000 chars)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Char limit (optional)</label>
+                          <input
+                            type="number"
+                            value={msgCharLimit}
+                            onChange={(e) => setMsgCharLimit(e.target.value)}
+                            placeholder="Override preset"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Tone</label>
+                          <select
+                            value={msgTone}
+                            onChange={(e) => setMsgTone(e.target.value as "professional" | "friendly" | "direct")}
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
+                          >
+                            <option value="professional">Professional</option>
+                            <option value="friendly">Friendly</option>
+                            <option value="direct">Direct</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Custom focus (optional)</label>
+                          <input
+                            type="text"
+                            value={msgCustomFocus}
+                            onChange={(e) => setMsgCustomFocus(e.target.value)}
+                            placeholder="e.g. Highlight React experience"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
+                          />
+                        </div>
+                        <button
+                          onClick={generateApplicationMessage}
+                          disabled={generating !== null}
+                          className="w-full py-2 px-4 bg-orange-700 text-white rounded-md hover:bg-orange-800 disabled:opacity-50 transition-colors text-sm font-medium"
+                        >
+                          {generating === "application_message" ? "Generating..." : "Generate"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 

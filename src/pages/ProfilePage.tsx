@@ -5,6 +5,7 @@ import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
 import { useProfileImport } from "@/hooks/useProfileImport";
+import { useResumeGeneration } from "@/hooks/useResumeGeneration";
 import FileDropZone from "@/components/FileDropZone";
 import { toWslPath, validateFileExtension } from "@/lib/wslPath";
 import type { Profile, EducationEntry, ParsedProfileData, ParsedMission } from "@/types/index";
@@ -109,7 +110,19 @@ export default function ProfilePage() {
   const [selectedMissions, setSelectedMissions] = useState<Set<number>>(new Set());
   const [missionFromYear, setMissionFromYear] = useState<string>("");
 
-  const { importFromFile, importFromPath, importFromText, loading: importing, error: importError } = useProfileImport();
+  const [importTab, setImportTab] = useState<"linkedin" | "resume">("linkedin");
+
+  const {
+    importFromFile, importFromPath, importFromText,
+    importResumeFromFile, importResumeFromPath, importResumeFromText,
+    loading: importing, error: importError,
+  } = useProfileImport();
+
+  const { generateResume, generating } = useResumeGeneration();
+
+  const handleGenerateResume = () => {
+    generateResume(profile);
+  };
 
   const loadData = () => {
     setLoading(true);
@@ -160,12 +173,14 @@ export default function ProfilePage() {
   };
 
   const handleImportFile = async () => {
-    const data = await importFromFile();
+    const fn = importTab === "resume" ? importResumeFromFile : importFromFile;
+    const data = await fn();
     if (data) applyImport(data);
   };
 
   const handleFileDrop = async (path: string) => {
-    const data = await importFromPath(path);
+    const fn = importTab === "resume" ? importResumeFromPath : importFromPath;
+    const data = await fn(path);
     if (data) {
       setImportOpen(true);
       applyImport(data);
@@ -180,7 +195,8 @@ export default function ProfilePage() {
       showToast(extError, "error");
       return;
     }
-    const data = await importFromPath(wslPath);
+    const fn = importTab === "resume" ? importResumeFromPath : importFromPath;
+    const data = await fn(wslPath);
     if (data) {
       setPathInput("");
       applyImport(data);
@@ -189,7 +205,8 @@ export default function ProfilePage() {
 
   const handleImportPaste = async () => {
     if (!pasteText.trim()) return;
-    const data = await importFromText(pasteText);
+    const fn = importTab === "resume" ? importResumeFromText : importFromText;
+    const data = await fn(pasteText);
     if (data) {
       applyImport(data);
       setPasteText("");
@@ -299,19 +316,29 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Your Profile</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            This powers the smart filtering. Leads will be scored against your preferences.
-          </p>
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Your Profile</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              This powers the smart filtering. Leads will be scored against your preferences.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateResume}
+            disabled={generating || !profile.name}
+            className="btn btn-secondary whitespace-nowrap"
+          >
+            {generating ? "Generating..." : "Export Resume (PDF)"}
+          </button>
         </header>
 
-        {/* Import from LinkedIn */}
+        {/* Import profile data */}
         <FileDropZone
           onFileDrop={handleFileDrop}
           onError={(msg) => showToast(msg, "error")}
           enabled={!importing}
-          label="Drop LinkedIn PDF here"
+          label="Drop profile document here"
         >
         <section className="mb-8">
           <button
@@ -320,11 +347,40 @@ export default function ProfilePage() {
             className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             <span>{importOpen ? "▾" : "▸"}</span>
-            Import from LinkedIn
+            Import Profile
           </button>
 
           {importOpen && (
             <div className="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
+              {/* Tabs */}
+              <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setImportTab("linkedin")}
+                  className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    importTab === "linkedin"
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  LinkedIn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportTab("resume")}
+                  className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+                    importTab === "resume"
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  Resume / CV
+                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                    AI
+                  </span>
+                </button>
+              </div>
+
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -332,14 +388,18 @@ export default function ProfilePage() {
                   disabled={importing}
                   className="btn btn-secondary text-sm"
                 >
-                  {importing ? "Parsing..." : "Upload LinkedIn PDF"}
+                  {importing
+                    ? "Parsing..."
+                    : importTab === "resume"
+                      ? "Upload Resume"
+                      : "Upload LinkedIn PDF"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPasteOpen(!pasteOpen)}
                   className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
-                  {pasteOpen ? "Hide paste" : "Or paste profile text"}
+                  {pasteOpen ? "Hide paste" : "Or paste text"}
                 </button>
               </div>
 
@@ -349,7 +409,11 @@ export default function ProfilePage() {
                   value={pathInput}
                   onChange={(e) => setPathInput(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="Or paste file path from Explorer"
+                  placeholder={
+                    importTab === "resume"
+                      ? "Or paste resume file path"
+                      : "Or paste file path from Explorer"
+                  }
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -373,7 +437,11 @@ export default function ProfilePage() {
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
                     className="input w-full h-32 text-sm"
-                    placeholder="Paste your LinkedIn profile text here..."
+                    placeholder={
+                      importTab === "resume"
+                        ? "Paste your resume / CV text here..."
+                        : "Paste your LinkedIn profile text here..."
+                    }
                   />
                   <button
                     type="button"
@@ -391,7 +459,9 @@ export default function ProfilePage() {
               )}
 
               <p className="text-xs text-gray-500">
-                Extracted data will auto-fill empty fields. Existing data is preserved.
+                {importTab === "resume"
+                  ? "Uses AI to extract profile data. Falls back to regex if AI is unavailable."
+                  : "Extracted data will auto-fill empty fields. Existing data is preserved."}
               </p>
             </div>
           )}
@@ -748,7 +818,7 @@ export default function ProfilePage() {
                 </div>
               )}
               <p className="text-xs text-gray-500">
-                Education entries can be added via LinkedIn import above.
+                Education entries can be added via profile import above.
               </p>
             </Field>
           </Section>
