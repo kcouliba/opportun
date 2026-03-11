@@ -97,9 +97,9 @@ export default function MissionsPage() {
 
 function MissionCard({ mission, isActive }: { mission: Mission; isActive?: boolean }) {
   const daysUntilEnd = mission.endDate
-    ? Math.ceil(
+    ? Math.max(0, Math.ceil(
         (new Date(mission.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      )
+      ))
     : null;
 
   const urgencyColor =

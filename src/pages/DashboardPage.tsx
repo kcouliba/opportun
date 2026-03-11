@@ -32,9 +32,9 @@ function computeDashboardData(
 ): DashboardData {
   const activeMission = missions.find((m) => m.status === "active") || null;
   const daysUntilEnd = activeMission?.endDate
-    ? Math.ceil(
+    ? Math.max(0, Math.ceil(
         (new Date(activeMission.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      )
+      ))
     : null;
 
   const activeLeads = leads.filter((l) => !["won", "lost"].includes(l.stage));
@@ -165,16 +165,28 @@ export default function DashboardPage() {
                 title="Mission Ends In"
                 value={
                   data.daysUntilEnd !== null
-                    ? `${data.daysUntilEnd} days`
+                    ? data.daysUntilEnd <= 0
+                      ? "Ended"
+                      : `${data.daysUntilEnd} days`
                     : data.activeMission
                     ? "Ongoing"
                     : "No mission"
                 }
-                subtitle={data.activeMission?.client || "Add your current work"}
-                to="/missions"
+                subtitle={
+                  data.daysUntilEnd !== null && data.daysUntilEnd <= 0
+                    ? "Mark as completed"
+                    : data.activeMission?.client || "Add your current work"
+                }
+                to={
+                  data.daysUntilEnd !== null && data.daysUntilEnd <= 0 && data.activeMission
+                    ? `/missions/${data.activeMission.id}`
+                    : "/missions"
+                }
                 variant={
                   !data.activeMission
                     ? "warning"
+                    : data.daysUntilEnd !== null && data.daysUntilEnd <= 0
+                    ? "danger"
                     : data.daysUntilEnd === null
                     ? "success"
                     : data.daysUntilEnd <= 30

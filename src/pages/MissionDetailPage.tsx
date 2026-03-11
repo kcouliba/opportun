@@ -125,9 +125,9 @@ export default function MissionDetailPage() {
   }
 
   const daysUntilEnd = mission.endDate
-    ? Math.ceil(
+    ? Math.max(0, Math.ceil(
         (new Date(mission.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      )
+      ))
     : null;
 
   const estimatedRevenue =
@@ -189,7 +189,7 @@ export default function MissionDetailPage() {
             >
               <p className="text-sm text-gray-500">Ends In</p>
               <p className="text-xl font-bold">
-                {daysUntilEnd !== null ? `${daysUntilEnd}d` : "Ongoing"}
+                {daysUntilEnd !== null ? (daysUntilEnd <= 0 ? "Ended" : `${daysUntilEnd}d`) : "Ongoing"}
               </p>
             </div>
           </div>

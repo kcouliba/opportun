@@ -40,9 +40,12 @@ export default function Navigation() {
         (m) => m.status === "active"
       );
       const daysLeft = activeMission?.endDate
-        ? Math.ceil(
-            (new Date(activeMission.endDate).getTime() - Date.now()) /
-              (1000 * 60 * 60 * 24)
+        ? Math.max(
+            0,
+            Math.ceil(
+              (new Date(activeMission.endDate).getTime() - Date.now()) /
+                (1000 * 60 * 60 * 24)
+            )
           )
         : null;
 
