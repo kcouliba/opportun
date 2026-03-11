@@ -3,6 +3,8 @@ mod db;
 mod llm;
 mod matching;
 mod models;
+#[cfg(feature = "sync")]
+mod sync;
 
 use db::Database;
 use tauri::Manager;
@@ -97,6 +99,23 @@ pub fn run() {
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,
+            // Sync (behind feature flag)
+            #[cfg(feature = "sync")]
+            commands::sync::get_sync_status,
+            #[cfg(feature = "sync")]
+            commands::sync::update_device_name,
+            #[cfg(feature = "sync")]
+            commands::sync::initiate_pairing,
+            #[cfg(feature = "sync")]
+            commands::sync::complete_pairing,
+            #[cfg(feature = "sync")]
+            commands::sync::sync_push,
+            #[cfg(feature = "sync")]
+            commands::sync::sync_pull,
+            #[cfg(feature = "sync")]
+            commands::sync::unpair_device,
+            #[cfg(feature = "sync")]
+            commands::sync::resolve_conflict,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -9,3 +9,5 @@ pub mod ai;
 pub mod import;
 pub mod settings;
 pub mod backup;
+#[cfg(feature = "sync")]
+pub mod sync;

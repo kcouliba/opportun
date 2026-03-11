@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
+import SyncPanel from "@/components/SyncPanel";
 import { useLeadSources } from "@/hooks/useLeadSources";
 import { useToast } from "@/components/Toast";
 
@@ -100,6 +101,9 @@ export default function SettingsPage() {
             <AiSettingsPanel />
           </Section>
 
+          {/* Sync (feature-flagged in backend) */}
+          <SyncSection />
+
           {/* Data */}
           <Section title="Data">
             <Field label="Export Backup" hint="Save a full copy of your database">
@@ -154,6 +158,24 @@ function Field({
       </label>
       {children}
     </div>
+  );
+}
+
+function SyncSection() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    invoke("get_sync_status")
+      .then(() => setAvailable(true))
+      .catch((e) => setAvailable(!String(e).includes("unknown command")));
+  }, []);
+
+  if (available === null || !available) return null;
+
+  return (
+    <Section title="Sync">
+      <SyncPanel />
+    </Section>
   );
 }
 

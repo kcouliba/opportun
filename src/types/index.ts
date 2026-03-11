@@ -335,3 +335,21 @@ export interface ParsedProfileData {
   education: EducationEntry[] | null;
   missions: ParsedMission[] | null;
 }
+
+// Sync types
+export interface SyncStatus {
+  paired: boolean;
+  deviceId: string;
+  deviceName: string;
+  lastSyncedAt: string | null;
+}
+
+export interface PairingOffer {
+  textCode: string;
+  qrCodePng: string; // base64 PNG
+}
+
+export interface SyncResult {
+  action: "pushed" | "pulled" | "up_to_date" | "conflict";
+  timestamp: string | null;
+}

@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/004_content_language.sql"),
     include_str!("migrations/005_app_settings.sql"),
     include_str!("migrations/006_ai_provider.sql"),
+    include_str!("migrations/007_sync.sql"),
 ];
 
 impl Database {

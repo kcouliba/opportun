@@ -9,6 +9,12 @@ interface DashboardStats {
   qualifiedCount: number;
 }
 
+interface SyncInfo {
+  available: boolean;
+  paired: boolean;
+  lastSyncedAt: string | null;
+}
+
 export default function Navigation() {
   const location = useLocation();
   const pathname = location.pathname;
@@ -17,6 +23,11 @@ export default function Navigation() {
     missionClient: null,
     pipelineCount: 0,
     qualifiedCount: 0,
+  });
+  const [syncInfo, setSyncInfo] = useState<SyncInfo>({
+    available: false,
+    paired: false,
+    lastSyncedAt: null,
   });
 
   useEffect(() => {
@@ -51,12 +62,25 @@ export default function Navigation() {
     }).catch(() => {
       // Silently fail if backend isn't ready yet
     });
+
+    invoke<{ paired: boolean; lastSyncedAt: string | null }>("get_sync_status")
+      .then((s) => setSyncInfo({ available: true, paired: s.paired, lastSyncedAt: s.lastSyncedAt }))
+      .catch(() => {});
   }, [pathname]);
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
   };
+
+  const syncDotColor = (() => {
+    if (!syncInfo.paired) return "bg-gray-400";
+    if (!syncInfo.lastSyncedAt) return "bg-gray-400";
+    const mins = (Date.now() - new Date(syncInfo.lastSyncedAt).getTime()) / 60000;
+    if (mins < 5) return "bg-green-500";
+    if (mins < 60) return "bg-green-500";
+    return "bg-orange-500";
+  })();
 
   const urgencyColor =
     stats.missionDaysLeft !== null
@@ -103,6 +127,9 @@ export default function Navigation() {
               </NavLink>
               <NavLink to="/settings" active={isActive("/settings")}>
                 Settings
+                {syncInfo.available && (
+                  <span className={`ml-1.5 w-2 h-2 rounded-full ${syncDotColor}`} />
+                )}
               </NavLink>
             </div>
           </div>
