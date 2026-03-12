@@ -900,11 +900,21 @@ async function startStdio() {
 }
 
 async function startHttp() {
-  const token = process.env.OPPORTUN_MCP_TOKEN;
+  let token = process.env.OPPORTUN_MCP_TOKEN;
+  if (!token) {
+    try {
+      const row = db
+        .prepare("SELECT mcpToken FROM appSettings WHERE id = 'singleton'")
+        .get() as { mcpToken: string | null } | undefined;
+      token = row?.mcpToken ?? undefined;
+    } catch {
+      // DB may not have the column yet
+    }
+  }
   if (!token) {
     console.error(
-      "ERROR: OPPORTUN_MCP_TOKEN must be set when running in HTTP mode.\n" +
-        "  OPPORTUN_MCP_TOKEN=my-secret npm run mcp:http"
+      "ERROR: No MCP token found. Open Settings in the app to generate one,\n" +
+        "  or set OPPORTUN_MCP_TOKEN=my-secret npm run mcp:http"
     );
     process.exit(1);
   }
@@ -936,9 +946,10 @@ async function startHttp() {
     await transport.handleRequest(req, res);
   });
 
-  httpServer.listen(port, "127.0.0.1", () => {
+  const host = process.env.OPPORTUN_MCP_HOST || "0.0.0.0";
+  httpServer.listen(port, host, () => {
     console.error(
-      `Opportun MCP Server v2 running on http://127.0.0.1:${port}/mcp`
+      `Opportun MCP Server v2 running on http://${host}:${port}/mcp`
     );
   });
 }

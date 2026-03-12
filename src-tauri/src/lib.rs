@@ -99,6 +99,8 @@ pub fn run() {
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,
+            commands::settings::get_mcp_token,
+            commands::settings::regenerate_mcp_token,
             // Sync (behind feature flag)
             #[cfg(feature = "sync")]
             commands::sync::get_sync_status,

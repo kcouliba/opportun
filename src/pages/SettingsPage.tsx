@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
+import McpPanel from "@/components/McpPanel";
 import SyncPanel from "@/components/SyncPanel";
 import { useLeadSources } from "@/hooks/useLeadSources";
 import { useToast } from "@/components/Toast";
@@ -99,6 +100,11 @@ export default function SettingsPage() {
           {/* AI Settings */}
           <Section title="AI Settings">
             <AiSettingsPanel />
+          </Section>
+
+          {/* MCP Integration */}
+          <Section title="MCP Integration">
+            <McpPanel />
           </Section>
 
           {/* Sync (feature-flagged in backend) */}
