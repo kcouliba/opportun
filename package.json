@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "audit": "npm audit && cargo audit --file src-tauri/Cargo.lock",
     "tauri": "tauri",
-    "mcp": "tsx src/mcp/server.ts"
+    "mcp": "tsx src/mcp/server.ts",
+    "mcp:http": "tsx src/mcp/server.ts --http"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

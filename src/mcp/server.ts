@@ -2,6 +2,8 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createServer } from "node:http";
 import { z } from "zod";
 import Database from "better-sqlite3";
 import { join } from "path";
@@ -887,14 +889,62 @@ server.tool(
   }
 );
 
-// Start the server
-async function main() {
+// ---------------------------------------------------------------------------
+// Transport: stdio (default) or HTTP (--http flag)
+// ---------------------------------------------------------------------------
+
+async function startStdio() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Opportun MCP Server v2 running on stdio (direct SQLite)");
 }
 
-main().catch((error) => {
+async function startHttp() {
+  const token = process.env.OPPORTUN_MCP_TOKEN;
+  if (!token) {
+    console.error(
+      "ERROR: OPPORTUN_MCP_TOKEN must be set when running in HTTP mode.\n" +
+        "  OPPORTUN_MCP_TOKEN=my-secret npm run mcp:http"
+    );
+    process.exit(1);
+  }
+
+  const port = Number(process.env.OPPORTUN_MCP_PORT) || 3100;
+
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // stateless
+  });
+
+  await server.connect(transport);
+
+  const httpServer = createServer(async (req, res) => {
+    // Only serve /mcp
+    if (req.url !== "/mcp") {
+      res.writeHead(404).end("Not found");
+      return;
+    }
+
+    // Auth check
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${token}`) {
+      res.writeHead(401, { "Content-Type": "application/json" }).end(
+        JSON.stringify({ error: "Unauthorized" })
+      );
+      return;
+    }
+
+    await transport.handleRequest(req, res);
+  });
+
+  httpServer.listen(port, "127.0.0.1", () => {
+    console.error(
+      `Opportun MCP Server v2 running on http://127.0.0.1:${port}/mcp`
+    );
+  });
+}
+
+const isHttp = process.argv.includes("--http");
+(isHttp ? startHttp() : startStdio()).catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);
 });
