@@ -6,6 +6,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { useToast } from "@/components/Toast";
 import KanbanBoard from "@/components/KanbanBoard";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 // Custom hook for debouncing values
 function useDebounce<T>(value: T, delay: number): T {
@@ -52,7 +53,14 @@ export default function LeadsPage() {
   const [viewMode, setViewMode] = useState<"list" | "kanban">(
     () => (localStorage.getItem("leadsViewMode") as "list" | "kanban") || "list"
   );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Clear selection when filter, search, or view mode changes
+  useEffect(() => {
+    setSelected(new Set());
+  }, [filter, debouncedSearch, viewMode]);
 
   const fetchLeads = useCallback(async (query: string) => {
     setLoading(true);
@@ -94,6 +102,44 @@ export default function LeadsPage() {
       showToast(`Lead moved to ${newStage}`, "success");
     } catch {
       showToast("Failed to update stage", "error");
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchDelete = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      const ids = Array.from(selected);
+      const count = await invoke<number>("batch_delete_leads", { ids });
+      showToast(`${count} lead(s) deleted`, "success");
+      setSelected(new Set());
+      await fetchLeads(debouncedSearch);
+    } catch {
+      showToast("Failed to delete leads", "error");
+    }
+  };
+
+  const handleBatchMoveStage = async (stage: string) => {
+    try {
+      const ids = Array.from(selected);
+      const count = await invoke<number>("batch_update_leads_stage", { ids, stage });
+      showToast(`${count} lead(s) moved to ${stageLabels[stage]?.label || stage}`, "success");
+      setSelected(new Set());
+      await fetchLeads(debouncedSearch);
+    } catch {
+      showToast("Failed to move leads", "error");
     }
   };
 
@@ -273,6 +319,48 @@ export default function LeadsPage() {
               ))}
             </div>
 
+            {/* Batch Toolbar */}
+            {selected.size > 0 && (
+              <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  {selected.size} selected
+                </span>
+                <button
+                  onClick={() => setSelected(new Set(filteredLeads.map((l) => l.id)))}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Select all
+                </button>
+                <button
+                  onClick={() => setSelected(new Set())}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Deselect all
+                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) handleBatchMoveStage(e.target.value);
+                      e.target.value = "";
+                    }}
+                    defaultValue=""
+                    className="text-sm px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                  >
+                    <option value="" disabled>Move to...</option>
+                    {Object.entries(stageLabels).map(([key, { label }]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleBatchDelete}
+                    className="text-sm px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Leads List */}
             {filteredLeads.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
@@ -287,13 +375,28 @@ export default function LeadsPage() {
             ) : (
               <div className="space-y-4">
                 {filteredLeads.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} />
+                  <LeadCard
+                    key={lead.id}
+                    lead={lead}
+                    selected={selected.has(lead.id)}
+                    onToggle={toggleSelection}
+                  />
                 ))}
               </div>
             )}
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete leads"
+        message={`Delete ${selected.size} lead(s)? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmBatchDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </main>
   );
 }
@@ -323,38 +426,57 @@ function FilterButton({
   );
 }
 
-function LeadCard({ lead }: { lead: Lead }) {
+function LeadCard({
+  lead,
+  selected,
+  onToggle,
+}: {
+  lead: Lead;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
+}) {
   const stage = stageLabels[lead.stage] || stageLabels.lead;
 
   return (
-    <Link
-      to={`/leads/${lead.id}`}
-      className="block p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
-    >
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold">{lead.title}</h3>
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${stage.color}`}>
-              {stage.label}
-            </span>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
-          <p className="text-gray-500 text-xs mt-1">
-            via {lead.source} • {new Date(lead.createdAt).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="text-right">
-          {lead.offeredRate && (
-            <p className="font-semibold">{lead.offeredRate}€/day</p>
-          )}
-          {lead.matchScore !== null && (
-            <p className={`text-sm ${lead.matchScore >= 70 ? "text-green-600" : lead.matchScore >= 40 ? "text-yellow-600" : "text-red-600"}`}>
-              {lead.matchScore}% match
+    <div className="flex items-center gap-3">
+      {onToggle && (
+        <input
+          type="checkbox"
+          checked={selected ?? false}
+          onChange={() => onToggle(lead.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 shrink-0"
+        />
+      )}
+      <Link
+        to={`/leads/${lead.id}`}
+        className="block flex-1 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold">{lead.title}</h3>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${stage.color}`}>
+                {stage.label}
+              </span>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
+            <p className="text-gray-500 text-xs mt-1">
+              via {lead.source} • {new Date(lead.createdAt).toLocaleDateString()}
             </p>
-          )}
+          </div>
+          <div className="text-right">
+            {lead.offeredRate && (
+              <p className="font-semibold">{lead.offeredRate}€/day</p>
+            )}
+            {lead.matchScore !== null && (
+              <p className={`text-sm ${lead.matchScore >= 70 ? "text-green-600" : lead.matchScore >= 40 ? "text-yellow-600" : "text-red-600"}`}>
+                {lead.matchScore}% match
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }

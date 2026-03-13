@@ -55,6 +55,8 @@ pub fn run() {
             commands::leads::get_lead_stats,
             commands::leads::export_leads_csv,
             commands::leads::update_lead_stage,
+            commands::leads::batch_delete_leads,
+            commands::leads::batch_update_leads_stage,
             // Missions
             commands::missions::list_missions,
             commands::missions::get_mission,

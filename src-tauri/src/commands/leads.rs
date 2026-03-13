@@ -686,6 +686,54 @@ pub fn update_lead_stage(db: State<Database>, id: String, stage: String) -> Resu
 }
 
 #[tauri::command]
+pub fn batch_delete_leads(db: State<Database>, ids: Vec<String>) -> Result<usize, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let conn = db.conn.lock().unwrap();
+    let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{}", i)).collect();
+    let sql = format!(
+        "DELETE FROM \"Lead\" WHERE \"id\" IN ({})",
+        placeholders.join(", ")
+    );
+    let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+    let deleted = conn.execute(&sql, params.as_slice()).map_err(|e| e.to_string())?;
+    Ok(deleted)
+}
+
+#[tauri::command]
+pub fn batch_update_leads_stage(
+    db: State<Database>,
+    ids: Vec<String>,
+    stage: String,
+) -> Result<usize, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let valid_stages = ["lead", "qualified", "negotiating", "won", "lost"];
+    if !valid_stages.contains(&stage.as_str()) {
+        return Err(format!("Invalid stage: {}", stage));
+    }
+    let conn = db.conn.lock().unwrap();
+    let now = Utc::now().to_rfc3339();
+    // Parameters: ?1 = stage, ?2 = now, ?3..?N = ids
+    let id_placeholders: Vec<String> = (3..3 + ids.len()).map(|i| format!("?{}", i)).collect();
+    let sql = format!(
+        "UPDATE \"Lead\" SET \"stage\" = ?1, \"updatedAt\" = ?2 WHERE \"id\" IN ({})",
+        id_placeholders.join(", ")
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    params.push(Box::new(stage));
+    params.push(Box::new(now));
+    for id in &ids {
+        params.push(Box::new(id.clone()));
+    }
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let updated = conn.execute(&sql, param_refs.as_slice()).map_err(|e| e.to_string())?;
+    Ok(updated)
+}
+
+#[tauri::command]
 pub fn export_leads_csv(db: State<Database>, filters: LeadFilters) -> Result<String, String> {
     let conn = db.conn.lock().unwrap();
 
