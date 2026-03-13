@@ -24,6 +24,7 @@ export default function Navigation() {
     pipelineCount: 0,
     qualifiedCount: 0,
   });
+  const [newDiscoveredCount, setNewDiscoveredCount] = useState(0);
   const [syncInfo, setSyncInfo] = useState<SyncInfo>({
     available: false,
     paired: false,
@@ -62,9 +63,11 @@ export default function Navigation() {
         pipelineCount: activeLeads.length,
         qualifiedCount: qualified.length,
       });
-    }).catch(() => {
-      // Silently fail if backend isn't ready yet
-    });
+    }).catch(() => {});
+
+    invoke<number>("count_new_discovered_leads")
+      .then((c) => setNewDiscoveredCount(c))
+      .catch(() => {});
 
     invoke<{ paired: boolean; lastSyncedAt: string | null }>("get_sync_status")
       .then((s) => setSyncInfo({ available: true, paired: s.paired, lastSyncedAt: s.lastSyncedAt }))
@@ -80,7 +83,6 @@ export default function Navigation() {
     if (!syncInfo.paired) return "bg-gray-400";
     if (!syncInfo.lastSyncedAt) return "bg-gray-400";
     const mins = (Date.now() - new Date(syncInfo.lastSyncedAt).getTime()) / 60000;
-    if (mins < 5) return "bg-green-500";
     if (mins < 60) return "bg-green-500";
     return "bg-orange-500";
   })();
@@ -94,85 +96,82 @@ export default function Navigation() {
         : "text-green-500"
       : "text-gray-400";
 
+  const urgencyDotColor =
+    stats.missionDaysLeft !== null
+      ? stats.missionDaysLeft <= 30
+        ? "bg-red-500"
+        : stats.missionDaysLeft <= 60
+        ? "bg-yellow-500"
+        : "bg-green-500"
+      : "bg-gray-400";
+
   return (
-    <nav className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo + Main Nav */}
-          <div className="flex items-center gap-8">
-            <Link to="/" className="font-bold text-xl">
-              Opportun
-            </Link>
-
-            <div className="hidden md:flex items-center gap-1">
-              <NavLink to="/" active={isActive("/") && pathname === "/"}>
-                Dashboard
-              </NavLink>
-              <NavLink to="/leads" active={isActive("/leads")}>
-                Pipeline
-                {stats.pipelineCount > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full">
-                    {stats.pipelineCount}
-                  </span>
-                )}
-              </NavLink>
-              <NavLink to="/activities" active={isActive("/activities")}>
-                Activity
-              </NavLink>
-              <NavLink to="/missions" active={isActive("/missions")}>
-                Missions
-              </NavLink>
-              <NavLink to="/analytics" active={isActive("/analytics")}>
-                Analytics
-              </NavLink>
-              <NavLink to="/profile" active={isActive("/profile")}>
-                Profile
-              </NavLink>
-              <NavLink to="/settings" active={isActive("/settings")}>
-                Settings
-                {syncInfo.available && (
-                  <span className={`ml-1.5 w-2 h-2 rounded-full ${syncDotColor}`} />
-                )}
-              </NavLink>
-            </div>
-          </div>
-
-          {/* Right side: Stats + Add Lead */}
-          <div className="flex items-center gap-4">
-            {/* Mission countdown - desktop */}
-            <div className="hidden lg:flex items-center gap-4 text-sm">
-              {stats.missionDaysLeft !== null ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">Mission ends:</span>
-                  <span className={`font-semibold ${urgencyColor}`}>
-                    {stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d` : "ended"}
-                  </span>
-                </div>
-              ) : (
-                <span className="text-gray-400">No active mission</span>
-              )}
-
-              {stats.qualifiedCount > 0 && (
-                <div className="flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-500">Qualified:</span>
-                  <span className="font-semibold text-green-600">{stats.qualifiedCount}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Capture - Primary Action */}
-            <Link
-              to="/leads/quick"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              <PlusIcon />
-              <span className="hidden sm:inline">Quick Add</span>
-            </Link>
-          </div>
+    <>
+      {/* Desktop sidebar */}
+      <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-16 lg:w-55 z-40 flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+        {/* Logo */}
+        <div className="flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-800">
+          <Link to="/" className="font-bold text-xl">
+            <span className="hidden lg:inline">Opportun</span>
+            <span className="lg:hidden">O</span>
+          </Link>
         </div>
 
-        {/* Mobile Nav */}
-        <div className="flex md:hidden border-t border-gray-100 dark:border-gray-800 -mx-4 px-4">
+        {/* Main nav */}
+        <div className="flex-1 flex flex-col py-2 px-2 gap-1 overflow-y-auto">
+          <SidebarLink to="/" icon={<HomeIcon />} label="Dashboard" active={isActive("/") && pathname === "/"} />
+          <SidebarLink to="/leads" icon={<PipelineIcon />} label="Pipeline" active={isActive("/leads")} badge={stats.pipelineCount || undefined} badgeColor="blue" />
+          <SidebarLink to="/sources" icon={<SourcesIcon />} label="Sources" active={isActive("/sources")} badge={newDiscoveredCount || undefined} badgeColor="green" />
+          <SidebarLink to="/activities" icon={<ActivityIcon />} label="Activity" active={isActive("/activities")} />
+          <SidebarLink to="/missions" icon={<BriefcaseIcon />} label="Missions" active={isActive("/missions")} />
+          <SidebarLink to="/analytics" icon={<ChartIcon />} label="Analytics" active={isActive("/analytics")} />
+
+          {/* Separator */}
+          <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
+
+          {/* Secondary nav */}
+          <SidebarLink to="/profile" icon={<UserIcon />} label="Profile" active={isActive("/profile")} />
+          <SidebarLink to="/settings" icon={<GearIcon />} label="Settings" active={isActive("/settings")} syncDot={syncInfo.available ? syncDotColor : undefined} />
+        </div>
+
+        {/* Bottom section */}
+        <div className="px-2 py-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
+          {/* Mission countdown — expanded */}
+          <div className="hidden lg:block px-2 text-sm">
+            {stats.missionDaysLeft !== null ? (
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 dark:text-gray-400">Mission:</span>
+                <span className={`font-semibold ${urgencyColor}`}>
+                  {stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d` : "Ended"}
+                </span>
+              </div>
+            ) : (
+              <span className="text-gray-400">No active mission</span>
+            )}
+          </div>
+          {/* Mission urgency dot — collapsed */}
+          <div className="flex lg:hidden justify-center">
+            <span className={`w-2.5 h-2.5 rounded-full ${urgencyDotColor}`} title={
+              stats.missionDaysLeft !== null
+                ? `Mission: ${stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d left` : "Ended"}`
+                : "No active mission"
+            } />
+          </div>
+
+          {/* Quick Add */}
+          <Link
+            to="/leads/quick"
+            className="flex items-center justify-center lg:justify-start gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+          >
+            <PlusIcon />
+            <span className="hidden lg:inline">Quick Add</span>
+          </Link>
+        </div>
+      </nav>
+
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <div className="flex px-4">
           <MobileNavLink to="/" active={isActive("/") && pathname === "/"}>
             <HomeIcon />
             <span>Home</span>
@@ -182,6 +181,13 @@ export default function Navigation() {
             <span>Pipeline</span>
             {stats.pipelineCount > 0 && (
               <span className="ml-1 text-xs text-blue-600">{stats.pipelineCount}</span>
+            )}
+          </MobileNavLink>
+          <MobileNavLink to="/sources" active={isActive("/sources")}>
+            <SourcesIcon />
+            <span>Sources</span>
+            {newDiscoveredCount > 0 && (
+              <span className="ml-1 text-xs text-green-600">{newDiscoveredCount}</span>
             )}
           </MobileNavLink>
           <MobileNavLink to="/activities" active={isActive("/activities")}>
@@ -205,30 +211,65 @@ export default function Navigation() {
             <span>Settings</span>
           </MobileNavLink>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }
 
-function NavLink({
+function SidebarLink({
   to,
+  icon,
+  label,
   active,
-  children,
+  badge,
+  badgeColor,
+  syncDot,
 }: {
   to: string;
+  icon: React.ReactNode;
+  label: string;
   active: boolean;
-  children: React.ReactNode;
+  badge?: number;
+  badgeColor?: "blue" | "green";
+  syncDot?: string;
 }) {
+  const badgeColors = {
+    blue: "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+    green: "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300",
+  };
+
   return (
     <Link
       to={to}
-      className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      title={label}
+      className={`relative flex items-center justify-center lg:justify-start gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
         active
           ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
           : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
       }`}
     >
-      {children}
+      <span className="shrink-0">{icon}</span>
+      <span className="hidden lg:inline">{label}</span>
+
+      {/* Badge pill — expanded */}
+      {badge !== undefined && badgeColor && (
+        <span className={`hidden lg:inline-block ml-auto px-1.5 py-0.5 text-xs rounded-full ${badgeColors[badgeColor]}`}>
+          {badge}
+        </span>
+      )}
+      {/* Badge dot — collapsed */}
+      {badge !== undefined && badgeColor && (
+        <span className={`lg:hidden absolute top-1 right-1 w-2 h-2 rounded-full ${badgeColor === "blue" ? "bg-blue-500" : "bg-green-500"}`} />
+      )}
+
+      {/* Sync dot — expanded */}
+      {syncDot && (
+        <span className={`hidden lg:inline-block ml-auto w-2 h-2 rounded-full ${syncDot}`} />
+      )}
+      {/* Sync dot — collapsed */}
+      {syncDot && (
+        <span className={`lg:hidden absolute top-1 right-1 w-2 h-2 rounded-full ${syncDot}`} />
+      )}
     </Link>
   );
 }
@@ -277,6 +318,14 @@ function PipelineIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
+function SourcesIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
     </svg>
   );
 }
