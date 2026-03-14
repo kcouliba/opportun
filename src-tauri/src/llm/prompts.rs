@@ -182,6 +182,28 @@ Rules:
 - Do NOT include subject lines or email headers
 - Write as a single flowing message, not paragraphs with headers"#;
 
+pub const JOB_BOARD_EXTRACT_SYSTEM: &str = r#"You are a job board scraper. Given the text content of a search results page from a freelance job board, extract each individual job listing visible on the page.
+
+Return a JSON array of objects:
+[
+  {
+    "title": "job title",
+    "client": "company or client name (null if not visible)",
+    "location": "city or region (null if not visible)",
+    "rate": 600,
+    "snippet": "brief description or first few lines of the listing",
+    "url": "URL to the individual listing page (null if not visible)"
+  }
+]
+
+Rules:
+- Extract EVERY job listing visible on the page — do not skip any
+- For rates: convert to daily (TJM) if possible. Use null if no rate is shown
+- For URLs: extract the full URL to the individual listing. Look for href links associated with each listing
+- Snippet should be the first 1-2 sentences or the summary text shown in the search results
+- If the page has no job listings (e.g., error page, login wall), return an empty array []
+- Only return valid JSON, no markdown fences"#;
+
 pub fn format_activities_for_prompt(activities: &[crate::models::Activity]) -> String {
     if activities.is_empty() {
         return String::new();

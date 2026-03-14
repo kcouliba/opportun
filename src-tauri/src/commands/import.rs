@@ -4,9 +4,8 @@ use std::collections::HashSet;
 
 // ── fetch_url_text ──────────────────────────────────────────────────────────
 
-#[tauri::command]
-pub async fn fetch_url_text(url: String) -> Result<String, String> {
-    // Validate URL scheme
+/// Inner helper reusable from other command modules.
+pub(crate) async fn fetch_url_text_inner(url: &str) -> Result<String, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("URL must start with http:// or https://".into());
     }
@@ -18,7 +17,7 @@ pub async fn fetch_url_text(url: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     let resp = client
-        .get(&url)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch URL: {e}"))?;
@@ -33,6 +32,11 @@ pub async fn fetch_url_text(url: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     Ok(strip_html_to_text(&html))
+}
+
+#[tauri::command]
+pub async fn fetch_url_text(url: String) -> Result<String, String> {
+    fetch_url_text_inner(&url).await
 }
 
 /// Remove HTML tags and convert to clean text.

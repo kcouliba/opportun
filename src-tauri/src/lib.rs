@@ -98,6 +98,17 @@ pub fn run() {
             commands::backup::backup_database,
             commands::backup::validate_database,
             commands::backup::restore_database,
+            // Watch Sources
+            commands::watch_sources::list_watch_sources,
+            commands::watch_sources::create_watch_source,
+            commands::watch_sources::update_watch_source,
+            commands::watch_sources::delete_watch_source,
+            commands::watch_sources::check_watch_source,
+            commands::watch_sources::list_discovered_leads,
+            commands::watch_sources::dismiss_discovered_leads,
+            commands::watch_sources::count_new_discovered_leads,
+            commands::watch_sources::import_discovered_lead,
+            commands::watch_sources::batch_import_discovered_leads,
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,

@@ -9,5 +9,6 @@ pub mod ai;
 pub mod import;
 pub mod settings;
 pub mod backup;
+pub mod watch_sources;
 #[cfg(feature = "sync")]
 pub mod sync;

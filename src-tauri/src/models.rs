@@ -476,6 +476,63 @@ pub struct ApplicationMessageOptions {
     pub custom_focus: Option<String>,
 }
 
+// Watch source types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchSource {
+    pub id: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub name: String,
+    pub url: String,
+    pub last_checked_at: Option<String>,
+    pub last_found_count: Option<i64>,
+    pub profile_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchSourceInput {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredLead {
+    pub id: String,
+    pub created_at: String,
+    pub source_id: String,
+    pub title: String,
+    pub client: Option<String>,
+    pub location: Option<String>,
+    pub rate: Option<i64>,
+    pub snippet: Option<String>,
+    pub listing_url: Option<String>,
+    pub status: String,
+    pub imported_lead_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedListing {
+    pub title: Option<String>,
+    pub client: Option<String>,
+    pub location: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_rate")]
+    pub rate: Option<i64>,
+    pub snippet: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkImportResult {
+    pub imported: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
 // Startup notification types
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
