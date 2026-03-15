@@ -1,11 +1,87 @@
 use crate::db::Database;
 use crate::llm::{self, LlmState};
 use crate::llm::provider::{LlmError, LlmRequest};
+use crate::llm::tier::ModelTier;
 use crate::models::{
     Activity, ActivityInsight, AiSettings, AiSettingsInput, ApplicationMessageOptions,
-    Document, InterviewPrep, Lead, LeadAnalysis, Mission, ParsedJobDescription,
-    ParsedProfileData, Profile,
+    Document, InterviewPrep, InterviewPrepQuestion, Lead, LeadAnalysis,
+    Mission, ParsedJobDescription, ParsedMission, ParsedProfileData, Profile, QuestionToAsk,
+    RateNegotiation,
 };
+
+/// Get the current ModelTier from LlmState settings.
+fn detect_tier(llm: &LlmState) -> ModelTier {
+    let settings = llm.settings.read().unwrap();
+    ModelTier::detect(&settings.provider, &settings.model_name)
+}
+
+/// Get GBNF grammar string for a given schema (only available with embedded-llm feature).
+fn basic_grammar(name: &str) -> Option<String> {
+    #[cfg(feature = "embedded-llm")]
+    {
+        let g = match name {
+            "job_parsing" => crate::llm::grammars::JOB_PARSING_BASIC,
+            "lead_analysis" => crate::llm::grammars::LEAD_ANALYSIS_BASIC,
+            "activity_insight" => crate::llm::grammars::ACTIVITY_INSIGHT,
+            "resume_info" => crate::llm::grammars::RESUME_BASIC_INFO,
+            "resume_missions" => crate::llm::grammars::RESUME_BASIC_MISSIONS,
+            "interview_technical" => crate::llm::grammars::INTERVIEW_PREP_TECHNICAL,
+            "interview_behavioral" => crate::llm::grammars::INTERVIEW_PREP_BEHAVIORAL,
+            "interview_rate" => crate::llm::grammars::INTERVIEW_PREP_RATE,
+            "job_board_extract" => crate::llm::grammars::JOB_BOARD_EXTRACT,
+            _ => return None,
+        };
+        Some(g.to_string())
+    }
+    #[cfg(not(feature = "embedded-llm"))]
+    {
+        let _ = name;
+        None
+    }
+}
+
+// ── Intermediate structs for decomposed Basic-tier responses ────────────────
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BasicResumeInfo {
+    pub name: Option<String>,
+    pub title: Option<String>,
+    pub bio: Option<String>,
+    pub years_experience: Option<i64>,
+    pub location: Option<String>,
+    pub technologies: Option<Vec<String>>,
+    pub domains: Option<Vec<String>>,
+    pub languages: Option<Vec<String>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BasicResumeMissions {
+    pub missions: Option<Vec<ParsedMission>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BasicInterviewTechnical {
+    pub technical_questions: Vec<InterviewPrepQuestion>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BasicInterviewBehavioral {
+    pub opening: String,
+    pub behavioral_questions: Vec<String>,
+    pub questions_to_ask: Vec<QuestionToAsk>,
+    pub red_flags: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BasicInterviewRate {
+    pub rate_negotiation: RateNegotiation,
+    pub closing_advice: String,
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -102,6 +178,12 @@ pub async fn check_ai_status(llm: tauri::State<'_, LlmState>) -> Result<AiStatus
 
     let (available, model_available, local_models) = if enabled {
         match provider.as_str() {
+            "embedded" => {
+                let avail = llm.is_available().await;
+                log::info!("[AI] check_ai_status: embedded available={}", avail);
+                // For embedded, model_available = is_available (model downloaded)
+                (true, avail, vec![])
+            }
             "openai" | "anthropic" => {
                 let avail = llm.is_available().await;
                 log::info!("[AI] check_ai_status: {} available={}", provider, avail);
@@ -142,13 +224,24 @@ pub async fn parse_job_ai(
     text: String,
 ) -> Result<ParsedJobDescription, LlmError> {
     log::info!("[AI] parse_job_ai called, text length={}", text.len());
+    let tier = detect_tier(&llm);
+
+    let (system_prompt, gbnf_grammar) = if tier.is_basic() {
+        (
+            llm::prompts_basic::JOB_PARSING_BASIC_SYSTEM.to_string(),
+            basic_grammar("job_parsing"),
+        )
+    } else {
+        (llm::prompts::JOB_PARSING_SYSTEM.to_string(), None)
+    };
 
     let request = LlmRequest {
-        system_prompt: llm::prompts::JOB_PARSING_SYSTEM.to_string(),
+        system_prompt,
         user_prompt: text,
         temperature: 0.0,
         max_tokens: 0,
         json_mode: true,
+        gbnf_grammar,
     };
 
     log::info!("[AI] parse_job_ai: sending request to LLM...");
@@ -200,6 +293,11 @@ pub async fn parse_resume_ai(
     text: String,
 ) -> Result<ParsedProfileData, LlmError> {
     log::info!("[AI] parse_resume_ai called, text length={}", text.len());
+    let tier = detect_tier(&llm);
+
+    if tier.is_basic() {
+        return parse_resume_ai_basic(&llm, text).await;
+    }
 
     let request = LlmRequest {
         system_prompt: llm::prompts::RESUME_PARSING_SYSTEM.to_string(),
@@ -207,6 +305,7 @@ pub async fn parse_resume_ai(
         temperature: 0.0,
         max_tokens: 0,
         json_mode: true,
+        gbnf_grammar: None,
     };
 
     log::info!("[AI] parse_resume_ai: sending request to LLM...");
@@ -250,6 +349,62 @@ pub async fn parse_resume_ai(
             Err(LlmError::InvalidJson(format!("{}: {}", e, cleaned)))
         }
     }
+}
+
+/// Basic-tier resume parsing: decomposed into 2 simpler calls.
+async fn parse_resume_ai_basic(
+    llm: &LlmState,
+    text: String,
+) -> Result<ParsedProfileData, LlmError> {
+    log::info!("[AI] parse_resume_ai_basic: decomposed mode (2 calls)");
+
+    // Call 1: basic info
+    let info_request = LlmRequest {
+        system_prompt: llm::prompts_basic::RESUME_PARSING_BASIC_INFO_SYSTEM.to_string(),
+        user_prompt: text.clone(),
+        temperature: 0.0,
+        max_tokens: 0,
+        json_mode: true,
+        gbnf_grammar: basic_grammar("resume_info"),
+    };
+
+    let info_response = llm.generate(info_request).await?;
+    let info_cleaned = llm::clean_json_response(&info_response.content)?;
+    let info: BasicResumeInfo = serde_json::from_str(&info_cleaned)
+        .map_err(|e| LlmError::InvalidJson(format!("Resume info parse failed: {}: {}", e, info_cleaned)))?;
+
+    log::info!("[AI] parse_resume_ai_basic: info parsed — name={:?}", info.name);
+
+    // Call 2: missions
+    let missions_request = LlmRequest {
+        system_prompt: llm::prompts_basic::RESUME_PARSING_BASIC_MISSIONS_SYSTEM.to_string(),
+        user_prompt: text,
+        temperature: 0.0,
+        max_tokens: 0,
+        json_mode: true,
+        gbnf_grammar: basic_grammar("resume_missions"),
+    };
+
+    let missions_response = llm.generate(missions_request).await?;
+    let missions_cleaned = llm::clean_json_response(&missions_response.content)?;
+    let missions: BasicResumeMissions = serde_json::from_str(&missions_cleaned)
+        .map_err(|e| LlmError::InvalidJson(format!("Resume missions parse failed: {}: {}", e, missions_cleaned)))?;
+
+    log::info!("[AI] parse_resume_ai_basic: missions parsed — count={}", missions.missions.as_ref().map(|m| m.len()).unwrap_or(0));
+
+    // Assemble the full ParsedProfileData
+    Ok(ParsedProfileData {
+        name: info.name,
+        title: info.title,
+        bio: info.bio,
+        years_experience: info.years_experience,
+        location: info.location,
+        technologies: info.technologies,
+        domains: info.domains,
+        languages: info.languages,
+        education: None, // Basic tier skips education parsing
+        missions: missions.missions,
+    })
 }
 
 fn fetch_lead_and_profile(
@@ -478,15 +633,29 @@ pub async fn analyze_lead_ai(
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
+    let tier = detect_tier(&llm);
     let lang = resolve_content_language(&profile, &lead);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
+    let (system_prompt, gbnf_grammar) = if tier.is_basic() {
+        (
+            format!("{}\n\n{}", llm::prompts_basic::LEAD_ANALYSIS_BASIC_SYSTEM, llm::prompts::language_instruction(&lang)),
+            basic_grammar("lead_analysis"),
+        )
+    } else {
+        (
+            format!("{}\n\n{}", llm::prompts::LEAD_ANALYSIS_SYSTEM, llm::prompts::language_instruction(&lang)),
+            None,
+        )
+    };
+
     let request = LlmRequest {
-        system_prompt: format!("{}\n\n{}", llm::prompts::LEAD_ANALYSIS_SYSTEM, llm::prompts::language_instruction(&lang)),
+        system_prompt,
         user_prompt,
         temperature: 0.0,
         max_tokens: 0,
         json_mode: true,
+        gbnf_grammar,
     };
 
     log::info!("[AI] analyze_lead_ai: sending request to LLM...");
@@ -547,6 +716,7 @@ pub async fn generate_cover_letter_ai(
         temperature: 0.5,
         max_tokens: 0,
         json_mode: false,
+        gbnf_grammar: None,
     };
 
     log::info!("[AI] generate_cover_letter_ai: sending request to LLM...");
@@ -587,8 +757,13 @@ pub async fn generate_interview_prep_ai(
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
+    let tier = detect_tier(&llm);
     let lang = resolve_content_language(&profile, &lead);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
+
+    if tier.is_basic() {
+        return generate_interview_prep_basic(&llm, &db, &lead_id, &lead, &user_prompt, &lang).await;
+    }
 
     let request = LlmRequest {
         system_prompt: format!("{}\n\n{}", llm::prompts::INTERVIEW_PREP_SYSTEM, llm::prompts::language_instruction(&lang)),
@@ -596,6 +771,7 @@ pub async fn generate_interview_prep_ai(
         temperature: 0.0,
         max_tokens: 4096,
         json_mode: true,
+        gbnf_grammar: None,
     };
 
     // Small local LLMs (3B-7B) with json_mode can still produce truncated or
@@ -653,6 +829,97 @@ pub async fn generate_interview_prep_ai(
     Err(last_err.unwrap_or_else(|| LlmError::InferenceFailed("Interview prep generation failed".to_string())))
 }
 
+/// Basic-tier interview prep: decomposed into 3 simpler calls, then assembled.
+async fn generate_interview_prep_basic(
+    llm: &LlmState,
+    db: &tauri::State<'_, Database>,
+    lead_id: &str,
+    lead: &Lead,
+    user_prompt: &str,
+    lang: &str,
+) -> Result<Document, LlmError> {
+    log::info!("[AI] generate_interview_prep_basic: decomposed mode (3 calls)");
+
+    // Call 1: technical questions
+    let tech_request = LlmRequest {
+        system_prompt: format!(
+            "{}\n\n{}",
+            llm::prompts_basic::INTERVIEW_PREP_BASIC_TECHNICAL_SYSTEM,
+            llm::prompts::language_instruction(lang)
+        ),
+        user_prompt: user_prompt.to_string(),
+        temperature: 0.0,
+        max_tokens: 2048,
+        json_mode: true,
+        gbnf_grammar: basic_grammar("interview_technical"),
+    };
+
+    let tech_response = llm.generate(tech_request).await?;
+    let tech_cleaned = llm::clean_json_response(&tech_response.content)?;
+    let tech: BasicInterviewTechnical = serde_json::from_str(&tech_cleaned)
+        .map_err(|e| LlmError::InvalidJson(format!("Technical Qs parse failed: {}: {}", e, tech_cleaned)))?;
+
+    log::info!("[AI] generate_interview_prep_basic: technical parsed — {} questions", tech.technical_questions.len());
+
+    // Call 2: behavioral + opening
+    let behav_request = LlmRequest {
+        system_prompt: format!(
+            "{}\n\n{}",
+            llm::prompts_basic::INTERVIEW_PREP_BASIC_BEHAVIORAL_SYSTEM,
+            llm::prompts::language_instruction(lang)
+        ),
+        user_prompt: user_prompt.to_string(),
+        temperature: 0.0,
+        max_tokens: 2048,
+        json_mode: true,
+        gbnf_grammar: basic_grammar("interview_behavioral"),
+    };
+
+    let behav_response = llm.generate(behav_request).await?;
+    let behav_cleaned = llm::clean_json_response(&behav_response.content)?;
+    let behav: BasicInterviewBehavioral = serde_json::from_str(&behav_cleaned)
+        .map_err(|e| LlmError::InvalidJson(format!("Behavioral parse failed: {}: {}", e, behav_cleaned)))?;
+
+    log::info!("[AI] generate_interview_prep_basic: behavioral parsed");
+
+    // Call 3: rate negotiation + closing
+    let rate_request = LlmRequest {
+        system_prompt: format!(
+            "{}\n\n{}",
+            llm::prompts_basic::INTERVIEW_PREP_BASIC_RATE_SYSTEM,
+            llm::prompts::language_instruction(lang)
+        ),
+        user_prompt: user_prompt.to_string(),
+        temperature: 0.0,
+        max_tokens: 1024,
+        json_mode: true,
+        gbnf_grammar: basic_grammar("interview_rate"),
+    };
+
+    let rate_response = llm.generate(rate_request).await?;
+    let rate_cleaned = llm::clean_json_response(&rate_response.content)?;
+    let rate: BasicInterviewRate = serde_json::from_str(&rate_cleaned)
+        .map_err(|e| LlmError::InvalidJson(format!("Rate parse failed: {}: {}", e, rate_cleaned)))?;
+
+    log::info!("[AI] generate_interview_prep_basic: rate parsed");
+
+    // Assemble the full InterviewPrep
+    let prep = InterviewPrep {
+        opening: behav.opening,
+        technical_questions: tech.technical_questions,
+        behavioral_questions: behav.behavioral_questions,
+        rate_negotiation: rate.rate_negotiation,
+        questions_to_ask: behav.questions_to_ask,
+        red_flags: behav.red_flags,
+        closing_advice: rate.closing_advice,
+    };
+
+    let markdown = format_interview_prep_as_markdown(&prep, &lead.client, &lead.title);
+    let doc = save_document(db, lead_id, "interview_prep", &markdown)?;
+    log::info!("[AI] generate_interview_prep_basic: saved document id={}", doc.id);
+    Ok(doc)
+}
+
 #[tauri::command]
 pub async fn pull_ai_model(
     llm: tauri::State<'_, LlmState>,
@@ -662,8 +929,9 @@ pub async fn pull_ai_model(
     log::info!("[AI] pull_ai_model called for model={}", model_name);
     {
         let settings = llm.settings.read().map_err(|_| LlmError::InferenceFailed("Failed to read settings".to_string()))?;
-        if settings.provider != "ollama" {
-            return Err(LlmError::InferenceFailed("Model pulling is only supported for Ollama".to_string()));
+        let provider = &settings.provider;
+        if provider != "ollama" && provider != "embedded" {
+            return Err(LlmError::InferenceFailed("Model pulling is only supported for Ollama or Embedded".to_string()));
         }
     }
     match llm.pull_model(app_handle, &model_name).await {
@@ -720,6 +988,7 @@ pub async fn analyze_activities_ai(
         return Err(LlmError::InferenceFailed("No activities to analyze".to_string()));
     }
 
+    let tier = detect_tier(&llm);
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     let lang = resolve_content_language(&profile, &lead);
     let base_prompt = build_user_prompt(&profile, &lead, &missions);
@@ -736,6 +1005,7 @@ pub async fn analyze_activities_ai(
         temperature: 0.0,
         max_tokens: 0,
         json_mode: true,
+        gbnf_grammar: if tier.is_basic() { basic_grammar("activity_insight") } else { None },
     };
 
     log::info!("[AI] analyze_activities_ai: sending request to LLM...");
@@ -820,6 +1090,7 @@ pub async fn generate_application_message_ai(
         temperature: 0.7,
         max_tokens: 0,
         json_mode: false,
+        gbnf_grammar: None,
     };
 
     log::info!("[AI] generate_application_message_ai: sending request to LLM...");
@@ -850,4 +1121,9 @@ pub async fn generate_application_message_ai(
             Err(e)
         }
     }
+}
+
+#[tauri::command]
+pub fn is_embedded_available() -> bool {
+    cfg!(feature = "embedded-llm")
 }

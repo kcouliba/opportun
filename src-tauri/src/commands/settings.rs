@@ -70,3 +70,8 @@ pub fn update_lead_sources(
     .map_err(|e| e.to_string())?;
     Ok(sources)
 }
+
+#[tauri::command]
+pub fn is_sync_available() -> bool {
+    cfg!(feature = "sync")
+}

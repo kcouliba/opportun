@@ -300,7 +300,9 @@ pub struct LeadAnalysis {
     pub fit_summary: String,
     pub strengths: Vec<String>,
     pub risks: Vec<String>,
+    #[serde(default)]
     pub talking_points: Vec<String>,
+    #[serde(default)]
     pub questions: Vec<String>,
     pub rate_advice: Option<String>,
 }

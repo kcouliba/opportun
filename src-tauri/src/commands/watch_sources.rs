@@ -156,12 +156,27 @@ pub async fn check_watch_source(
     };
 
     // 3. AI extraction
+    let tier = {
+        let settings = llm.settings.read().unwrap();
+        crate::llm::tier::ModelTier::detect(&settings.provider, &settings.model_name)
+    };
+
+    let gbnf_grammar = if tier.is_basic() {
+        #[cfg(feature = "embedded-llm")]
+        { Some(crate::llm::grammars::JOB_BOARD_EXTRACT.to_string()) }
+        #[cfg(not(feature = "embedded-llm"))]
+        { None }
+    } else {
+        None
+    };
+
     let request = LlmRequest {
         system_prompt: crate::llm::prompts::JOB_BOARD_EXTRACT_SYSTEM.to_string(),
         user_prompt: truncated.to_string(),
         temperature: 0.0,
         max_tokens: 0,
         json_mode: true,
+        gbnf_grammar,
     };
 
     let response = llm
@@ -412,6 +427,7 @@ pub async fn import_discovered_lead(
                     temperature: 0.0,
                     max_tokens: 0,
                     json_mode: true,
+                    gbnf_grammar: None,
                 };
 
                 if let Ok(response) = llm.generate(request).await {

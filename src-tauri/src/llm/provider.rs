@@ -29,12 +29,16 @@ impl serde::Serialize for LlmError {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LlmRequest {
     pub system_prompt: String,
     pub user_prompt: String,
     pub temperature: f64,
     pub max_tokens: i64,
     pub json_mode: bool,
+    /// GBNF grammar string for constrained generation (used by embedded provider).
+    /// Existing providers (Ollama, OpenAI, Anthropic) ignore this field.
+    pub gbnf_grammar: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -168,15 +168,13 @@ function Field({
 }
 
 function SyncSection() {
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [available, setAvailable] = useState(false);
 
   useEffect(() => {
-    invoke("get_sync_status")
-      .then(() => setAvailable(true))
-      .catch((e) => setAvailable(!String(e).includes("unknown command")));
+    invoke<boolean>("is_sync_available").then(setAvailable).catch(() => {});
   }, []);
 
-  if (available === null || !available) return null;
+  if (!available) return null;
 
   return (
     <Section title="Sync">

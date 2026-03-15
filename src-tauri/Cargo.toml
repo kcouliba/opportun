@@ -36,6 +36,9 @@ thiserror = "2"
 futures-util = "0.3"
 regex = "1"
 pdf-extract = "0.10"
+llama-cpp-2 = { version = "0.1", optional = true }
+hf-hub = { version = "0.4", optional = true }
+encoding_rs = { version = "0.8", optional = true }
 chacha20poly1305 = { version = "0.10", optional = true }
 zstd = { version = "0.13", optional = true }
 base64 = { version = "0.22", optional = true }
@@ -46,7 +49,7 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 
 [features]
 default = []
-embedded-llm = []
+embedded-llm = ["llama-cpp-2", "hf-hub", "encoding_rs"]
 sync = ["chacha20poly1305", "zstd", "base64", "qrcode", "image"]
 
 [profile.release]

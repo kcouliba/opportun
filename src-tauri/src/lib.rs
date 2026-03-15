@@ -26,11 +26,16 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("Failed to get app data directory");
+            #[cfg(feature = "embedded-llm")]
+            let models_dir = app_data_dir.join("models");
             let database =
                 Database::new(app_data_dir).expect("Failed to initialize database");
 
             // Initialize AI/LLM state
             let ai_settings = llm::load_settings_from_db(&database);
+            #[cfg(feature = "embedded-llm")]
+            let llm_state = llm::create_llm_state(ai_settings, models_dir);
+            #[cfg(not(feature = "embedded-llm"))]
             let llm_state = llm::create_llm_state(ai_settings);
             app.manage(llm_state);
 
@@ -86,6 +91,7 @@ pub fn run() {
             commands::ai::analyze_activities_ai,
             commands::ai::generate_application_message_ai,
             commands::ai::parse_resume_ai,
+            commands::ai::is_embedded_available,
             // Import
             commands::import::fetch_url_text,
             commands::import::read_file_text,
@@ -114,6 +120,7 @@ pub fn run() {
             commands::settings::update_lead_sources,
             commands::settings::get_mcp_token,
             commands::settings::regenerate_mcp_token,
+            commands::settings::is_sync_available,
             // Sync (behind feature flag)
             #[cfg(feature = "sync")]
             commands::sync::get_sync_status,

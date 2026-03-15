@@ -1,8 +1,14 @@
 pub mod anthropic;
+#[cfg(feature = "embedded-llm")]
+pub mod embedded;
+#[cfg(feature = "embedded-llm")]
+pub mod grammars;
 pub mod ollama;
 pub mod openai;
 pub mod prompts;
+pub mod prompts_basic;
 pub mod provider;
+pub mod tier;
 
 use crate::db::Database;
 use crate::models::AiSettings;
@@ -14,6 +20,8 @@ use std::sync::RwLock;
 
 pub struct LlmState {
     pub settings: RwLock<AiSettings>,
+    #[cfg(feature = "embedded-llm")]
+    pub embedded: embedded::EmbeddedProvider,
 }
 
 impl LlmState {
@@ -52,6 +60,12 @@ impl LlmState {
         );
 
         match settings.provider.as_str() {
+            #[cfg(feature = "embedded-llm")]
+            "embedded" => {
+                self.embedded
+                    .generate_with_model(&settings.model_name, request)
+                    .await
+            }
             "openai" => {
                 let api_key = Self::require_api_key(&settings)?;
                 let base_url = if settings.ollama_url.is_empty()
@@ -100,6 +114,12 @@ impl LlmState {
         };
 
         match settings.provider.as_str() {
+            #[cfg(feature = "embedded-llm")]
+            "embedded" => {
+                let avail = self.embedded.is_available();
+                log::info!("[LLM] is_available (embedded): {}", avail);
+                avail
+            }
             "openai" | "anthropic" => {
                 let avail = settings
                     .api_key
@@ -121,6 +141,8 @@ impl LlmState {
     pub async fn list_models(&self) -> Result<Vec<provider::ModelInfo>, LlmError> {
         let settings = self.read_settings()?;
         match settings.provider.as_str() {
+            #[cfg(feature = "embedded-llm")]
+            "embedded" => Ok(self.embedded.list_models()),
             "openai" | "anthropic" => Ok(vec![]),
             _ => {
                 let provider = OllamaProvider::new(settings.ollama_url.clone());
@@ -136,8 +158,10 @@ impl LlmState {
     ) -> Result<(), LlmError> {
         let settings = self.read_settings()?;
         match settings.provider.as_str() {
+            #[cfg(feature = "embedded-llm")]
+            "embedded" => self.embedded.download_model(app_handle).await,
             "openai" | "anthropic" => Err(LlmError::InferenceFailed(
-                "Model pulling is only supported for Ollama".to_string(),
+                "Model pulling is only supported for Ollama or Embedded".to_string(),
             )),
             _ => {
                 let provider = OllamaProvider::new(settings.ollama_url.clone());
@@ -177,6 +201,18 @@ pub fn load_settings_from_db(db: &Database) -> AiSettings {
     })
 }
 
+#[cfg(feature = "embedded-llm")]
+pub fn create_llm_state(
+    settings: AiSettings,
+    models_dir: std::path::PathBuf,
+) -> LlmState {
+    LlmState {
+        settings: RwLock::new(settings),
+        embedded: embedded::EmbeddedProvider::new(models_dir),
+    }
+}
+
+#[cfg(not(feature = "embedded-llm"))]
 pub fn create_llm_state(settings: AiSettings) -> LlmState {
     LlmState {
         settings: RwLock::new(settings),

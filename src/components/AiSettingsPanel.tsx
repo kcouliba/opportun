@@ -12,11 +12,16 @@ const ANTHROPIC_MODEL_PRESETS = [
   "claude-haiku-4-5-20251001",
 ];
 
-const PROVIDERS = [
+interface ProviderOption {
+  value: string;
+  label: string;
+}
+
+const BASE_PROVIDERS: ProviderOption[] = [
   { value: "ollama", label: "Ollama (Local)" },
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
-] as const;
+];
 
 interface AiSettingsPanelProps {
   /** Controlled mode: external state + onChange instead of auto-saving */
@@ -32,6 +37,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   const [pullProgress, setPullProgress] = useState<DownloadProgress | null>(null);
   const [checking, setChecking] = useState(false);
   const [showBaseUrl, setShowBaseUrl] = useState(false);
+  const [embeddedAvailable, setEmbeddedAvailable] = useState(false);
 
   // Internal state for uncontrolled mode
   const [internalSettings, setInternalSettings] = useState<AiSettings | null>(null);
@@ -51,6 +57,13 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   } | null>(null);
 
   const settings = controlled ? value : internalSettings;
+
+  // Check if embedded-llm feature is compiled in
+  useEffect(() => {
+    invoke<boolean>("is_embedded_available")
+      .then(setEmbeddedAvailable)
+      .catch(() => setEmbeddedAvailable(false));
+  }, []);
 
   useEffect(() => {
     if (!controlled) {
@@ -99,7 +112,13 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
 
   const provider = settings.provider || "ollama";
   const isOllama = provider === "ollama";
+  const isEmbedded = provider === "embedded";
   const isApiProvider = provider === "openai" || provider === "anthropic";
+
+  // Build providers list — include Embedded only if feature compiled in
+  const providers: ProviderOption[] = embeddedAvailable
+    ? [{ value: "embedded", label: "Embedded (Built-in)" }, ...BASE_PROVIDERS]
+    : BASE_PROVIDERS;
 
   const update = async (patch: Partial<AiSettings>) => {
     const updated = { ...settings, ...patch };
@@ -122,7 +141,10 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   const handleProviderChange = (newProvider: string) => {
     const patch: Partial<AiSettings> = { provider: newProvider };
     // Set sensible defaults when switching providers
-    if (newProvider === "ollama") {
+    if (newProvider === "embedded") {
+      patch.modelName = "Phi-3.5-mini-instruct-Q4_K_M.gguf";
+      patch.ollamaUrl = "";
+    } else if (newProvider === "ollama") {
       patch.modelName = "llama3.2:3b";
       patch.ollamaUrl = "http://localhost:11434";
     } else if (newProvider === "openai") {
@@ -183,9 +205,11 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
         <div>
           <p className="font-medium text-sm">Enable AI Features</p>
           <p className="text-xs text-gray-500">
-            {isOllama
-              ? "Requires Ollama running locally"
-              : `Uses ${provider === "openai" ? "OpenAI" : "Anthropic"} API with your key`}
+            {isEmbedded
+              ? "Uses built-in local model (no setup required)"
+              : isOllama
+                ? "Requires Ollama running locally"
+                : `Uses ${provider === "openai" ? "OpenAI" : "Anthropic"} API with your key`}
           </p>
         </div>
         <button
@@ -208,13 +232,13 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Provider
         </label>
-        <div className="flex gap-2">
-          {PROVIDERS.map((p) => (
+        <div className="flex gap-2 flex-wrap">
+          {providers.map((p) => (
             <button
               key={p.value}
               type="button"
               onClick={() => handleProviderChange(p.value)}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              className={`flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 provider === p.value
                   ? "bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300"
                   : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -233,17 +257,27 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
             <div className="flex items-center gap-2">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  displayStatus?.available ? "bg-green-500" : "bg-red-500"
+                  isEmbedded
+                    ? displayStatus?.modelAvailable
+                      ? "bg-green-500"
+                      : "bg-yellow-500"
+                    : displayStatus?.available
+                      ? "bg-green-500"
+                      : "bg-red-500"
                 }`}
               />
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {isOllama
-                  ? displayStatus?.available
-                    ? "Ollama connected"
-                    : "Ollama not reachable"
-                  : displayStatus?.available
-                    ? "API key configured"
-                    : "API key missing"}
+                {isEmbedded
+                  ? displayStatus?.modelAvailable
+                    ? "Model ready (~2.2 GB)"
+                    : "Model not downloaded"
+                  : isOllama
+                    ? displayStatus?.available
+                      ? "Ollama connected"
+                      : "Ollama not reachable"
+                    : displayStatus?.available
+                      ? "API key configured"
+                      : "API key missing"}
               </span>
               <button
                 type="button"
@@ -277,6 +311,43 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
               })()}
           </div>
 
+          {/* Embedded provider: model info + download */}
+          {isEmbedded && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Model
+              </label>
+              <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-400">
+                Phi-3.5 Mini (Q4_K_M)
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Optimized for local inference. Runs entirely on your device.
+              </p>
+
+              {!displayStatus?.modelAvailable && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handlePullModel}
+                    disabled={pulling}
+                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {pulling ? "Downloading..." : "Download Model (~2.2 GB)"}
+                  </button>
+                  {pullProgress && (
+                    <div className="mt-2">
+                      <DownloadProgressBar
+                        status={pullProgress.status}
+                        completed={pullProgress.completed}
+                        total={pullProgress.total}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* API Key (for OpenAI / Anthropic) */}
           {isApiProvider && (
             <div>
@@ -300,50 +371,54 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
             </div>
           )}
 
-          {/* Model Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Model
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={settings.modelName}
-                onChange={(e) => handleModelChange(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={
-                  isOllama
-                    ? "e.g., llama3.2:3b"
-                    : provider === "openai"
-                      ? "e.g., gpt-4o-mini"
-                      : "e.g., claude-sonnet-4-5-20250514"
-                }
-              />
+          {/* Model Name (Ollama, OpenAI, Anthropic — not Embedded) */}
+          {!isEmbedded && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Model
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={settings.modelName}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={
+                    isOllama
+                      ? "e.g., llama3.2:3b"
+                      : provider === "openai"
+                        ? "e.g., gpt-4o-mini"
+                        : "e.g., claude-sonnet-4-5-20250514"
+                  }
+                />
+              </div>
+              {!isEmbedded && (
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {modelPresets.map((preset) => {
+                    const isSelected = settings.modelName === preset;
+                    const isLocal =
+                      isOllama && displayStatus?.localModels?.includes(preset);
+                    return (
+                      <button
+                        type="button"
+                        key={preset}
+                        onClick={() => handleModelChange(preset)}
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          isSelected
+                            ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
+                            : isLocal
+                              ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50"
+                              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {modelPresets.map((preset) => {
-                const isSelected = settings.modelName === preset;
-                const isLocal =
-                  isOllama && displayStatus?.localModels?.includes(preset);
-                return (
-                  <button
-                    type="button"
-                    key={preset}
-                    onClick={() => handleModelChange(preset)}
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      isSelected
-                        ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
-                        : isLocal
-                          ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
           {/* Ollama URL (only for Ollama) */}
           {isOllama && (
