@@ -19,73 +19,119 @@ export interface ResumeData {
   missions: Mission[];
 }
 
+const BLUE = "#3d85a8";
+
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
+    padding: 45,
+    paddingBottom: 40,
     fontFamily: "Helvetica",
     fontSize: 10,
-    color: "#1a1a1a",
+    color: "#222",
     lineHeight: 1.5,
   },
+
+  // Header
   name: {
-    fontSize: 22,
+    fontSize: 26,
     fontFamily: "Helvetica-Bold",
+    color: "#1a1a1a",
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+    marginBottom: 8,
+  },
+  contactLine: {
+    fontSize: 9,
+    color: "#555",
     marginBottom: 2,
   },
-  title: {
-    fontSize: 12,
-    color: "#555",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 9,
-    color: "#777",
-  },
-  rule: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#ccc",
-    marginTop: 12,
-    marginBottom: 10,
+
+  // Sections
+  section: {
+    marginTop: 14,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
-    textTransform: "uppercase" as const,
-    letterSpacing: 1,
+    color: BLUE,
     marginBottom: 6,
-    color: "#333",
   },
-  text: {
+
+  // Bio / summary
+  bio: {
     fontSize: 10,
     lineHeight: 1.6,
+    color: "#333",
+  },
+
+  // Skills
+  skillRow: {
+    flexDirection: "row" as const,
+    marginBottom: 2,
+  },
+  skillLabel: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 10,
+    width: 100,
+    color: "#333",
+  },
+  skillValue: {
+    fontSize: 10,
+    color: "#444",
+    flex: 1,
+  },
+
+  // Experience
+  missionBlock: {
+    marginBottom: 10,
   },
   missionTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 10,
+    fontSize: 11,
+    color: BLUE,
   },
   missionMeta: {
     fontSize: 9,
     color: "#555",
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  missionDescription: {
-    fontSize: 9.5,
-    lineHeight: 1.5,
-    color: "#333",
+  bulletRow: {
+    flexDirection: "row" as const,
+    marginBottom: 1,
+    paddingLeft: 8,
   },
-  missionBlock: {
-    marginBottom: 8,
-  },
-  eduBlock: {
-    marginBottom: 4,
-  },
-  eduSchool: {
-    fontFamily: "Helvetica-Bold",
+  bulletDot: {
+    width: 12,
     fontSize: 10,
+    color: "#555",
   },
-  eduDetail: {
+  bulletText: {
+    fontSize: 9.5,
+    lineHeight: 1.4,
+    color: "#333",
+    flex: 1,
+  },
+  descriptionText: {
+    fontSize: 9.5,
+    lineHeight: 1.4,
+    color: "#333",
+    paddingLeft: 8,
+  },
+
+  // Education
+  eduBlock: {
+    marginBottom: 6,
+  },
+  eduTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    color: BLUE,
+  },
+  eduMeta: {
     fontSize: 9,
     color: "#555",
+    marginBottom: 2,
   },
 });
 
@@ -94,103 +140,167 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
+/**
+ * Parse a description into bullet points.
+ *
+ * Recognizes lines starting with -, *, or bullet char as distinct bullets.
+ * Consecutive plain lines (no bullet prefix) are joined into a single paragraph.
+ * A blank line also forces a split.
+ */
+function parseDescription(text: string): { type: "bullet" | "paragraph"; text: string }[] {
+  const lines = text.split("\n");
+  const result: { type: "bullet" | "paragraph"; text: string }[] = [];
+  let paragraphBuffer: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraphBuffer.length > 0) {
+      result.push({ type: "paragraph", text: paragraphBuffer.join(" ") });
+      paragraphBuffer = [];
+    }
+  };
+
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    // Check if line starts with a bullet marker
+    const bulletMatch = trimmed.match(/^[\-\*\u2022\u2023\u25E6\u25AA\u25CF]\s*(.*)/);
+    if (bulletMatch) {
+      flushParagraph();
+      result.push({ type: "bullet", text: bulletMatch[1].trim() });
+    } else {
+      paragraphBuffer.push(trimmed);
+    }
+  }
+  flushParagraph();
+
+  return result;
+}
+
+function DescriptionBlock({ text }: { text: string }) {
+  const items = parseDescription(text);
+
+  // If everything is plain paragraphs (no bullet markers found), show as plain text
+  const hasBullets = items.some((i) => i.type === "bullet");
+  if (!hasBullets) {
+    return <Text style={styles.descriptionText}>{text}</Text>;
+  }
+
+  return (
+    <>
+      {items.map((item, i) =>
+        item.type === "bullet" ? (
+          <View key={i} style={styles.bulletRow}>
+            <Text style={styles.bulletDot}>&#8226;</Text>
+            <Text style={styles.bulletText}>{item.text}</Text>
+          </View>
+        ) : (
+          <Text key={i} style={styles.descriptionText}>{item.text}</Text>
+        )
+      )}
+    </>
+  );
+}
+
 export default function ResumeDocument({ data }: { data: ResumeData }) {
   const sortedMissions = [...data.missions].sort(
     (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
   );
 
+  const contactParts = [
+    data.location,
+    data.languages.length > 0 ? data.languages.join(", ") : "",
+  ].filter(Boolean);
+
+  const skillCategories: { label: string; value: string }[] = [];
+  if (data.technologies.length > 0) {
+    skillCategories.push({ label: "Technologies", value: data.technologies.join(", ") });
+  }
+  if (data.domains.length > 0) {
+    skillCategories.push({ label: "Domains", value: data.domains.join(", ") });
+  }
+  if (data.languages.length > 0) {
+    skillCategories.push({ label: "Languages", value: data.languages.join(", ") });
+  }
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={styles.page} wrap>
         {/* Header */}
         <View>
           <Text style={styles.name}>{data.name}</Text>
-          {data.title && <Text style={styles.title}>{data.title}</Text>}
-          {(data.location || data.languages.length > 0) && (
-            <Text style={styles.subtitle}>
-              {[data.location, data.languages.length > 0 ? data.languages.join(", ") : ""]
-                .filter(Boolean)
-                .join("  |  ")}
+          {contactParts.length > 0 && (
+            <Text style={styles.contactLine}>
+              {contactParts.join("  |  ")}
             </Text>
+          )}
+          {data.title && (
+            <Text style={styles.contactLine}>{data.title}</Text>
           )}
         </View>
 
-        {/* Summary */}
+        {/* Profile / Summary */}
         {data.bio && (
-          <>
-            <View style={styles.rule} />
-            <View>
-              <Text style={styles.sectionTitle}>Summary</Text>
-              <Text style={styles.text}>{data.bio}</Text>
-            </View>
-          </>
-        )}
-
-        {/* Skills */}
-        {(data.technologies.length > 0 || data.domains.length > 0) && (
-          <>
-            <View style={styles.rule} />
-            <View>
-              <Text style={styles.sectionTitle}>Skills</Text>
-              {data.technologies.length > 0 && (
-                <Text style={styles.text}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Technologies: </Text>
-                  {data.technologies.join(", ")}
-                </Text>
-              )}
-              {data.domains.length > 0 && (
-                <Text style={styles.text}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Domains: </Text>
-                  {data.domains.join(", ")}
-                </Text>
-              )}
-            </View>
-          </>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Profile</Text>
+            <Text style={styles.bio}>{data.bio}</Text>
+          </View>
         )}
 
         {/* Experience */}
         {sortedMissions.length > 0 && (
-          <>
-            <View style={styles.rule} />
-            <View>
-              <Text style={styles.sectionTitle}>Experience</Text>
-              {sortedMissions.map((mission) => (
-                <View key={mission.id} style={styles.missionBlock}>
-                  <Text style={styles.missionTitle}>{mission.title}</Text>
-                  <Text style={styles.missionMeta}>
-                    {mission.client}  |  {formatDate(mission.startDate)}
-                    {" - "}
-                    {mission.endDate ? formatDate(mission.endDate) : "Present"}
-                  </Text>
-                  {mission.description && (
-                    <Text style={styles.missionDescription}>
-                      {mission.description}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Experience</Text>
+            {sortedMissions.map((mission) => (
+              <View key={mission.id} style={styles.missionBlock} wrap={false}>
+                <Text style={styles.missionTitle}>
+                  {mission.title}
+                </Text>
+                <Text style={styles.missionMeta}>
+                  {mission.client}  |  {formatDate(mission.startDate)}
+                  {" - "}
+                  {mission.endDate ? formatDate(mission.endDate) : "Present"}
+                </Text>
+                {mission.description && (
+                  <DescriptionBlock text={mission.description} />
+                )}
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Education */}
         {data.education.length > 0 && (
-          <>
-            <View style={styles.rule} />
-            <View>
-              <Text style={styles.sectionTitle}>Education</Text>
-              {data.education.map((entry, i) => (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Education</Text>
+            {data.education.map((entry, i) => {
+              const meta = [entry.degree, entry.field, entry.endYear]
+                .filter(Boolean)
+                .join("  |  ");
+              return (
                 <View key={i} style={styles.eduBlock}>
-                  <Text style={styles.eduSchool}>{entry.school}</Text>
-                  <Text style={styles.eduDetail}>
-                    {[entry.degree, entry.field, entry.endYear]
-                      .filter(Boolean)
-                      .join("  |  ")}
-                  </Text>
+                  <Text style={styles.eduTitle}>{entry.school}</Text>
+                  {meta && <Text style={styles.eduMeta}>{meta}</Text>}
                 </View>
-              ))}
-            </View>
-          </>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Skills */}
+        {skillCategories.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Skills</Text>
+            {skillCategories.map((cat, i) => (
+              <View key={i} style={styles.skillRow}>
+                <Text style={styles.skillLabel}>{cat.label}</Text>
+                <Text style={styles.skillValue}>{cat.value}</Text>
+              </View>
+            ))}
+          </View>
         )}
       </Page>
     </Document>

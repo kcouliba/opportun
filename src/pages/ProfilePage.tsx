@@ -276,7 +276,7 @@ export default function ProfilePage() {
         showToast("Profile saved successfully", "success");
       }
 
-      navigate("/");
+      setSaving(false);
     } catch {
       showToast("An error occurred while saving", "error");
       setSaving(false);
