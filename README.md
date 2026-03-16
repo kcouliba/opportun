@@ -1,21 +1,37 @@
 # Opportun
 
-Freelance Pipeline Manager — a Tauri v2 desktop app for managing freelance leads, proposals, and job opportunities.
+Freelance pipeline manager — track leads, missions, and revenue with AI-powered analysis. Desktop app built with Tauri 2, Rust, React, and SQLite.
+
+## Features
+
+- **Lead pipeline** — kanban board and list view with drag-and-drop, batch actions, search, filtering, and CSV export
+- **Match scoring** — automatically score leads against your profile (technologies, domains, rate, location, blacklists)
+- **AI-powered** — job description parsing, lead analysis, cover letters, interview prep, application messages, activity insights. Supports Ollama (local), OpenAI, Anthropic (BYOK), or embedded llama.cpp with GPU acceleration
+- **Watch sources** — monitor job boards for new opportunities with AI-powered listing extraction
+- **Resume export** — generate a professional PDF resume from your profile and mission history
+- **Income forecast** — 6-month projection with secured + weighted pipeline income
+- **Cross-device sync** — end-to-end encrypted sync via ephemeral relay (XChaCha20-Poly1305, feature-flagged)
+- **MCP server** — 18 tools for programmatic access via stdio or HTTP with bearer token auth
+- **Internationalization** — French and English, with browser locale detection
+- **Command palette** — Ctrl+K to search and navigate anywhere
 
 ## Tech Stack
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS v4, Vite
-- **Backend:** Rust (Tauri v2), SQLite (rusqlite)
-- **AI:** Local LLM integration for job parsing, lead analysis, cover letters & interview prep
-- **MCP:** Model Context Protocol server (`tsx src/mcp/server.ts`)
+| Layer | Technologies |
+|-------|-------------|
+| Frontend | React 19, TypeScript, Tailwind CSS v4, Vite |
+| Backend | Rust, Tauri v2, SQLite (rusqlite) |
+| AI | Ollama, OpenAI, Anthropic, llama.cpp (optional) |
+| i18n | react-i18next |
+| MCP | @modelcontextprotocol/sdk (stdio + HTTP) |
 
 ## Prerequisites
 
 | Tool | Version | Install |
 |------|---------|---------|
-| **Node.js** | ≥ 18 | [nodejs.org](https://nodejs.org) |
-| **Rust** | ≥ 1.77.2 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| **System libs** (Linux) | — | see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) |
+| Node.js | >= 18 | [nodejs.org](https://nodejs.org) |
+| Rust | >= 1.77.2 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| System libs (Linux) | -- | See below |
 
 ### Linux system dependencies (Debian/Ubuntu)
 
@@ -25,38 +41,10 @@ sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patc
   libssl-dev pkg-config
 ```
 
-## Architecture
-
-```
-┌──────────────────────────────────────────────────┐
-│                  React Frontend                  │
-│    Pages ─── Components ─── Hooks ─── Types      │
-└────────────────────┬─────────────────────────────┘
-                     │  invoke("command", { args })
-                     │  (Tauri IPC)
-┌────────────────────▼─────────────────────────────┐
-│                 Rust Backend                      │
-│  commands/     ─── #[tauri::command] handlers     │
-│  matching.rs   ─── profile ↔ lead scoring         │
-│  llm/          ─── Ollama integration             │
-│  db.rs         ─── SQLite setup + migrations      │
-│  migrations/   ─── SQL schema files               │
-└────────────────────┬─────────────────────────────┘
-                     │
-              ┌──────▼──────┐
-              │   SQLite    │
-              │ opportun.db │
-              └─────────────┘
-```
-
-**Data flow:** React components call `invoke("command_name", { args })` from `@tauri-apps/api/core`. This triggers a Rust function annotated with `#[tauri::command]`. Commands interact with SQLite through a shared `Database` struct (connection behind a `Mutex`). AI features call the local Ollama server via HTTP (`reqwest`).
-
-**Migrations** are SQL files in `src-tauri/src/migrations/`, compiled into the binary with `include_str!`. They run automatically on startup via a `user_version` pragma check.
-
 ## Getting Started
 
 ```bash
-# Install JS dependencies
+# Install dependencies
 npm install
 
 # Run the desktop app (frontend + Rust backend)
@@ -66,11 +54,18 @@ npx tauri dev
 npm run dev
 ```
 
-## Development Workflow
+### Feature flags
 
-1. **`npx tauri dev`** starts both Vite (with HMR) and the Rust backend. Frontend changes hot-reload instantly; Rust changes trigger a recompile (~15s).
-2. **Before committing**, run `npm run check` — this runs ESLint, TypeScript type-checking, and `cargo clippy` in one pass.
-3. **CI** runs automatically on push to `main` and on pull requests (see `.github/workflows/ci.yml`).
+```bash
+# Embedded LLM (CPU)
+npx tauri dev --features embedded-llm
+
+# Embedded LLM with GPU acceleration
+LIBRARY_PATH=/usr/lib/x86_64-linux-gnu npx tauri dev --features embedded-llm-cuda
+
+# Cross-device sync
+npx tauri dev --features sync
+```
 
 ## Scripts
 
@@ -79,106 +74,143 @@ npm run dev
 | `npm run dev` | Vite dev server (frontend only) |
 | `npx tauri dev` | Full desktop app (frontend + Rust) |
 | `npm run build` | TypeScript check + Vite production build |
+| `npm run check` | Lint + type-check + Rust clippy |
 | `npm run test` | Run Vitest tests |
 | `npm run test:rust` | Run Rust tests |
 | `npm run test:all` | Run JS + Rust tests |
-| `npm run lint` | ESLint |
-| `npm run type-check` | TypeScript type check |
-| `npm run check` | Lint + type-check + Rust clippy |
-| `npm run mcp` | Start MCP server |
+| `npm run mcp` | Start MCP server (stdio) |
+| `npm run mcp:http` | Start MCP server (HTTP, requires token) |
 
-## Testing
+## Keyboard Shortcuts
 
-| Command | What it runs |
-|---------|-------------|
-| `npm run test` | Vitest — React component tests + JS unit tests |
-| `npm run test:rust` | `cargo test` — Rust unit tests (DB, commands, matching) |
-| `npm run test:all` | Both of the above |
-| `npm run test:watch` | Vitest in watch mode |
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+K` | Command palette |
+| `Ctrl+N` | New lead |
+| `Ctrl+Shift+N` | Quick capture |
+| `Escape` | Close palette / cancel |
 
-### Adding React tests
+## Architecture
 
-1. Create `src/pages/__tests__/YourPage.test.tsx` (or `src/components/__tests__/`)
-2. Import `renderWithProviders` from `@/test/render` — wraps your component in `MemoryRouter`, `ToastProvider`, and `AiQueueProvider`
-3. Import `onInvoke` / `clearInvokeHandlers` from `@/test/tauri-mock` to mock Tauri `invoke` calls
-
-```tsx
-import { onInvoke, clearInvokeHandlers } from "@/test/tauri-mock";
-import { renderWithProviders } from "@/test/render";
-
-beforeEach(() => clearInvokeHandlers());
-
-it("loads data", async () => {
-  onInvoke("get_profile", () => ({ id: "1", name: "Alice" }));
-  renderWithProviders(<ProfilePage />);
-  await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
-});
 ```
++--------------------------------------------------+
+|                  React Frontend                   |
+|    Pages --- Components --- Hooks --- Types       |
++------------------------+-------------------------+
+                         | invoke("command", { args })
+                         | (Tauri IPC)
++------------------------v-------------------------+
+|                  Rust Backend                     |
+|  commands/    --- #[tauri::command] handlers      |
+|  llm/         --- Multi-provider AI abstraction   |
+|    ollama.rs     Ollama (local HTTP)              |
+|    openai.rs     OpenAI-compatible APIs           |
+|    anthropic.rs  Anthropic Claude API             |
+|    embedded.rs   llama.cpp (optional, GPU)        |
+|  sync/        --- Encrypted cross-device sync     |
+|  matching.rs  --- Profile <-> lead scoring        |
+|  db.rs        --- SQLite setup + migrations       |
++------------------------+-------------------------+
+                         |
+                  +------v------+
+                  |   SQLite    |
+                  | opportun.db |
+                  +-------------+
 
-### Adding Rust tests
-
-Use `Database::in_memory()` for tests that need a database — it creates an in-memory SQLite instance with all migrations applied:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use crate::db::Database;
-
-    #[test]
-    fn my_test() {
-        let db = Database::in_memory().unwrap();
-        let conn = db.conn.lock().unwrap();
-        // insert test data, call functions, assert
-    }
-}
++--------------------------------------------------+
+|              MCP Server (Node.js)                 |
+|  stdio or HTTP transport, direct SQLite access    |
+|  18 tools: leads, activities, stats, stages       |
++--------------------------------------------------+
 ```
 
 ## Project Structure
 
 ```
 src/                        # React frontend
+  pages/                    # Route pages (13)
   components/               # Reusable UI components
-    ErrorBoundary.tsx        #   React error boundary
-    ErrorState.tsx           #   Error display with retry
-    Toast.tsx                #   Toast notifications
-    AiQueue.tsx              #   AI task queue
-    KanbanBoard.tsx          #   Drag-and-drop kanban
-  pages/                    # Route pages
-    DashboardPage.tsx        #   Overview + income forecast
-    LeadsPage.tsx            #   Lead pipeline list
-    LeadDetailPage.tsx       #   Lead details + documents
-    ProfilePage.tsx          #   User profile
-    MissionsPage.tsx         #   Mission list
-    AnalyticsPage.tsx        #   Pipeline analytics
-  pages/__tests__/          # Component tests
-  hooks/                    # React hooks
-  lib/                      # Utilities (matching, WSL paths)
-  test/                     # Test infrastructure
-    setup.ts                 #   jest-dom matchers
-    tauri-mock.ts            #   Mock @tauri-apps/api
-    render.tsx               #   renderWithProviders helper
-  types/                    # TypeScript types
-  mcp/                      # MCP server
-src-tauri/                  # Rust backend (Tauri)
+  hooks/                    # React hooks (AI, sync, resume, etc.)
+  locales/                  # i18n translation files (en, fr)
+  types/                    # TypeScript interfaces
+  mcp/                      # MCP server (stdio + HTTP)
+  i18n.ts                   # i18n configuration
+src-tauri/                  # Rust backend
   src/
     commands/               # Tauri command handlers
-      leads.rs               #   Lead CRUD + filtering
-      missions.rs            #   Mission CRUD
-      profile.rs             #   Profile management
-      analytics.rs           #   Pipeline analytics
-      backup.rs              #   DB backup/restore
-      dashboard.rs           #   Dashboard data
-      ai.rs                  #   AI document generation
-      import.rs              #   File import (PDF/text)
-    llm/                    # LLM integration
-      ollama.rs              #   Ollama HTTP client
-      prompts.rs             #   Prompt templates
-      provider.rs            #   Provider abstraction
-    migrations/             # SQL migration files
+    llm/                    # Multi-provider LLM layer
+    sync/                   # Encrypted sync (feature-flagged)
+    migrations/             # SQL migration files (009)
     db.rs                   # Database setup + migrations
-    matching.rs             # Profile ↔ lead scoring
+    matching.rs             # Lead scoring engine
     models.rs               # Serde structs
     lib.rs                  # Tauri app setup
-docs/                       # Design docs
-.github/workflows/ci.yml   # GitHub Actions CI
+  capabilities/             # Tauri permission config
+  .cargo/config.toml        # Build config (CUDA paths)
+.github/workflows/
+  ci.yml                    # Lint + test on push/PR
+  release.yml               # Cross-platform builds on tag
 ```
+
+## MCP Server
+
+The MCP server provides programmatic access to your pipeline data.
+
+**Stdio** (for Claude Code, Claude Desktop):
+```bash
+npm run mcp
+```
+
+**HTTP** (for external services):
+```bash
+OPPORTUN_MCP_TOKEN=your-token npm run mcp:http
+# Connects to http://127.0.0.1:3100/mcp
+```
+
+The token can also be auto-generated in Settings. Configure in Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "opportun": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp/server.ts"],
+      "env": { "OPPORTUN_DB_PATH": "/path/to/opportun.db" }
+    }
+  }
+}
+```
+
+## Releasing
+
+Releases are built automatically by GitHub Actions when you push a version tag:
+
+```bash
+git tag v0.3.0
+git push github main --tags
+```
+
+This builds installers for all platforms (Linux .deb/.AppImage, macOS .dmg, Windows .msi/.exe) and creates a draft GitHub Release.
+
+## Testing
+
+```bash
+# Frontend tests (Vitest + React Testing Library)
+npm run test
+
+# Rust tests (SQLite in-memory, matching, backup validation)
+npm run test:rust
+
+# Both
+npm run test:all
+```
+
+## Adding a Language
+
+1. Copy `src/locales/en.json` to `src/locales/xx.json` and translate the values
+2. In `src/i18n.ts`, add `import xx from "./locales/xx.json"` and register it in resources
+3. Add an `<option>` in the Settings language dropdown
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full development roadmap and current status.
