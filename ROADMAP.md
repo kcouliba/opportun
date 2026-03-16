@@ -31,7 +31,7 @@
 
 **What's missing:**
 - No release automation (CI runs on push/PR)
-- Desktop features underutilized (no app menu, no keyboard shortcuts)
+- Desktop features underutilized (no app menu)
 - No accessibility (0 aria labels)
 - Resume PDF layout needs polish
 
@@ -121,9 +121,9 @@ _Make daily use faster and more pleasant._
 
 _Leverage Tauri properly — make it feel native and shippable._
 
-- [ ] **Window state persistence** — Remember window size/position between sessions
+- [x] **Window state persistence** — tauri-plugin-window-state saves/restores size and position automatically
+- [x] **Keyboard shortcuts** — Ctrl+K command palette (search + navigate), Ctrl+N new lead, Ctrl+Shift+N quick capture
 - [ ] **App menu** — File (New Lead, Export), Edit (Undo), View (Dark mode toggle), Help (About, Docs)
-- [ ] **Keyboard shortcuts** — `Ctrl+K` search, `Ctrl+N` new lead, `Ctrl+S` save, `Escape` close/cancel
 - [ ] **Auto-update** — Tauri updater plugin for self-updating from GitHub releases
 - [ ] **Release workflow** — GitHub Actions to build + publish installers (Linux .deb/.AppImage, macOS .dmg, Windows .msi)
 
@@ -134,7 +134,7 @@ _Leverage Tauri properly — make it feel native and shippable._
 _Deeper value for power users._
 
 - [x] **Revenue dashboard** — Forecast income based on pipeline probability and mission schedule (6-month projection, secured + weighted pipeline income)
-- [x] **Encrypted cross-device sync** — Signal-like peer-to-peer sync (feature-flagged `--features sync`). XChaCha20-Poly1305 encryption, zstd-compressed full-DB snapshots, QR/text code pairing, ephemeral relay protocol. Conflict resolution UI in Settings
+- [x] **Encrypted cross-device sync** — Signal-like peer-to-peer sync (feature-flagged `--features sync`). XChaCha20-Poly1305 encryption, zstd-compressed full-DB snapshots, QR/text code pairing, ephemeral relay protocol. Relay is self-hostable, app connects to any relay URL
 - [ ] **Email template system** — Customizable outreach templates (not just generated cover letters)
 - [ ] **Lead source analytics** — Which sources convert best? Track ROI per source
 - [ ] **Calendar view** — Visualize missions timeline and upcoming activities
