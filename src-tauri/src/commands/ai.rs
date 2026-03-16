@@ -108,7 +108,7 @@ pub fn update_ai_settings(
     llm: tauri::State<'_, LlmState>,
     data: AiSettingsInput,
 ) -> Result<AiSettings, String> {
-    log::info!("[AI] update_ai_settings called with: {:?}", data);
+    log::info!("[AI] update_ai_settings called (provider={:?}, model={:?})", data.provider, data.model_name);
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Build dynamic update

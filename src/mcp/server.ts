@@ -946,7 +946,7 @@ async function startHttp() {
     await transport.handleRequest(req, res);
   });
 
-  const host = process.env.OPPORTUN_MCP_HOST || "0.0.0.0";
+  const host = process.env.OPPORTUN_MCP_HOST || "127.0.0.1";
   httpServer.listen(port, host, () => {
     console.error(
       `Opportun MCP Server v2 running on http://${host}:${port}/mcp`
