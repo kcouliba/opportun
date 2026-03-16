@@ -72,8 +72,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Opportun ${{ github.ref_name }}"
           releaseBody: |
-            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-
             ## Downloads
             | Platform | File |
             |----------|------|
