@@ -34,7 +34,29 @@ pub fn run() {
             // Initialize AI/LLM state
             let ai_settings = llm::load_settings_from_db(&database);
             #[cfg(feature = "embedded-llm")]
-            let llm_state = llm::create_llm_state(ai_settings, models_dir);
+            let llm_state = {
+                let (state, embedded_clone) = llm::create_llm_state(ai_settings, models_dir);
+
+                // Spawn background thread to auto-unload idle model (>10 min)
+                std::thread::spawn(move || {
+                    let idle_limit = std::time::Duration::from_secs(600); // 10 minutes
+                    let check_interval = std::time::Duration::from_secs(60);
+                    loop {
+                        std::thread::sleep(check_interval);
+                        if embedded_clone.is_loaded()
+                            && embedded_clone.idle_duration() > idle_limit
+                        {
+                            log::info!(
+                                "[Embedded] Model idle for >{:.0}s, unloading to free RAM",
+                                idle_limit.as_secs()
+                            );
+                            embedded_clone.unload();
+                        }
+                    }
+                });
+
+                state
+            };
             #[cfg(not(feature = "embedded-llm"))]
             let llm_state = llm::create_llm_state(ai_settings);
             app.manage(llm_state);
@@ -92,6 +114,8 @@ pub fn run() {
             commands::ai::generate_application_message_ai,
             commands::ai::parse_resume_ai,
             commands::ai::is_embedded_available,
+            #[cfg(feature = "embedded-llm")]
+            commands::ai::unload_embedded_model,
             // Import
             commands::import::fetch_url_text,
             commands::import::read_file_text,

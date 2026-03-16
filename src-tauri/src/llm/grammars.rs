@@ -155,3 +155,54 @@ ws "}"
 root ::= "[" ws "]" | "[" ws listing (ws "," ws listing)* ws "]"
 "#
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Validate structural integrity of a GBNF grammar string.
+    fn validate_grammar_structure(grammar: &str, name: &str) {
+        assert!(!grammar.is_empty(), "{name}: grammar is empty");
+        assert!(
+            grammar.contains("root ::="),
+            "{name}: missing root ::= rule"
+        );
+
+        // In GBNF, all bracket types are globally balanced:
+        // - character classes [...]
+        // - grouping (...)
+        // - string literals "{" / "}" appear in matching pairs
+        let open_parens = grammar.matches('(').count();
+        let close_parens = grammar.matches(')').count();
+        assert_eq!(open_parens, close_parens, "{name}: unbalanced parentheses");
+
+        let open_brackets = grammar.matches('[').count();
+        let close_brackets = grammar.matches(']').count();
+        assert_eq!(open_brackets, close_brackets, "{name}: unbalanced square brackets");
+
+        let open_braces = grammar.matches('{').count();
+        let close_braces = grammar.matches('}').count();
+        assert_eq!(open_braces, close_braces, "{name}: unbalanced curly braces");
+
+        // Check balanced quotes
+        let quote_count = grammar.matches('"').count();
+        assert_eq!(
+            quote_count % 2,
+            0,
+            "{name}: unbalanced quotes ({quote_count} total)"
+        );
+    }
+
+    #[test]
+    fn validate_all_grammars() {
+        validate_grammar_structure(JOB_PARSING_BASIC, "JOB_PARSING_BASIC");
+        validate_grammar_structure(LEAD_ANALYSIS_BASIC, "LEAD_ANALYSIS_BASIC");
+        validate_grammar_structure(ACTIVITY_INSIGHT, "ACTIVITY_INSIGHT");
+        validate_grammar_structure(RESUME_BASIC_INFO, "RESUME_BASIC_INFO");
+        validate_grammar_structure(RESUME_BASIC_MISSIONS, "RESUME_BASIC_MISSIONS");
+        validate_grammar_structure(INTERVIEW_PREP_TECHNICAL, "INTERVIEW_PREP_TECHNICAL");
+        validate_grammar_structure(INTERVIEW_PREP_BEHAVIORAL, "INTERVIEW_PREP_BEHAVIORAL");
+        validate_grammar_structure(INTERVIEW_PREP_RATE, "INTERVIEW_PREP_RATE");
+        validate_grammar_structure(JOB_BOARD_EXTRACT, "JOB_BOARD_EXTRACT");
+    }
+}

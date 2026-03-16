@@ -205,11 +205,13 @@ pub fn load_settings_from_db(db: &Database) -> AiSettings {
 pub fn create_llm_state(
     settings: AiSettings,
     models_dir: std::path::PathBuf,
-) -> LlmState {
-    LlmState {
+) -> (LlmState, embedded::EmbeddedProvider) {
+    let provider = embedded::EmbeddedProvider::new(models_dir);
+    let state = LlmState {
         settings: RwLock::new(settings),
-        embedded: embedded::EmbeddedProvider::new(models_dir),
-    }
+        embedded: provider.clone(),
+    };
+    (state, provider)
 }
 
 #[cfg(not(feature = "embedded-llm"))]

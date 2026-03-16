@@ -1127,3 +1127,11 @@ pub async fn generate_application_message_ai(
 pub fn is_embedded_available() -> bool {
     cfg!(feature = "embedded-llm")
 }
+
+#[cfg(feature = "embedded-llm")]
+#[tauri::command]
+pub fn unload_embedded_model(llm: tauri::State<'_, LlmState>) -> Result<(), String> {
+    log::info!("[AI] unload_embedded_model called");
+    llm.embedded.unload();
+    Ok(())
+}
