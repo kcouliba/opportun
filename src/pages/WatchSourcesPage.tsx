@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -29,6 +30,7 @@ interface DiscoveredLead {
 type FilterTab = "new" | "all" | "dismissed";
 
 export default function WatchSourcesPage() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
 
   // Sources state
@@ -57,9 +59,9 @@ export default function WatchSourcesPage() {
       const data = await invoke<WatchSource[]>("list_watch_sources");
       setSources(data);
     } catch {
-      showToast("Failed to load sources", "error");
+      showToast(t("watchSources.failedLoadSources"), "error");
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   // Load discovered leads
   const loadLeads = useCallback(
@@ -73,10 +75,10 @@ export default function WatchSourcesPage() {
         setLeads(data);
         setSelectedIds(new Set());
       } catch {
-        showToast("Failed to load discovered leads", "error");
+        showToast(t("watchSources.failedLoadDiscovered"), "error");
       }
     },
-    [filterTab, showToast],
+    [filterTab, showToast, t],
   );
 
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function WatchSourcesPage() {
   // Add source
   const handleAdd = async () => {
     if (!addName.trim() || !addUrl.trim()) {
-      showToast("Name and URL are required", "error");
+      showToast(t("watchSources.nameAndUrlRequired"), "error");
       return;
     }
     setAddLoading(true);
@@ -101,10 +103,10 @@ export default function WatchSourcesPage() {
       setAddName("");
       setAddUrl("");
       setShowAddForm(false);
-      showToast("Source added", "success");
+      showToast(t("watchSources.sourceAdded"), "success");
       await loadSources();
     } catch {
-      showToast("Failed to add source", "error");
+      showToast(t("watchSources.failedAddSource"), "error");
     }
     setAddLoading(false);
   };
@@ -118,10 +120,10 @@ export default function WatchSourcesPage() {
         data: { name: editName.trim(), url: editUrl.trim() },
       });
       setEditingId(null);
-      showToast("Source updated", "success");
+      showToast(t("watchSources.sourceUpdated"), "success");
       await loadSources();
     } catch {
-      showToast("Failed to update source", "error");
+      showToast(t("watchSources.failedUpdateSource"), "error");
     }
   };
 
@@ -130,11 +132,11 @@ export default function WatchSourcesPage() {
     try {
       await invoke("delete_watch_source", { id });
       if (selectedSourceId === id) setSelectedSourceId(null);
-      showToast("Source deleted", "success");
+      showToast(t("watchSources.sourceDeleted"), "success");
       setDeleteConfirm(null);
       await loadSources();
     } catch {
-      showToast("Failed to delete source", "error");
+      showToast(t("watchSources.failedDeleteSource"), "error");
     }
   };
 
@@ -147,15 +149,15 @@ export default function WatchSourcesPage() {
       });
       showToast(
         newLeads.length > 0
-          ? `Found ${newLeads.length} new listing${newLeads.length > 1 ? "s" : ""}`
-          : "No new listings found",
+          ? t("watchSources.found", { count: newLeads.length })
+          : t("common.noResults"),
         newLeads.length > 0 ? "success" : "info",
       );
       setSelectedSourceId(id);
       await loadSources();
       await loadLeads(id);
     } catch (e) {
-      showToast(`Check failed: ${e}`, "error");
+      showToast(t("watchSources.checkFailed", { error: e }), "error");
     }
     setCheckingId(null);
   };
@@ -188,15 +190,15 @@ export default function WatchSourcesPage() {
         { ids: Array.from(selectedIds), useAi },
       );
       if (result.imported > 0) {
-        showToast(`Imported ${result.imported} lead${result.imported > 1 ? "s" : ""}`, "success");
+        showToast(t("watchSources.importedCount", { count: result.imported }), "success");
       }
       if (result.failed > 0) {
-        showToast(`${result.failed} failed to import`, "error");
+        showToast(t("watchSources.importFailedCount", { count: result.failed }), "error");
       }
       setSelectedIds(new Set());
       await loadLeads(selectedSourceId);
     } catch (e) {
-      showToast(`Import failed: ${e}`, "error");
+      showToast(t("watchSources.importFailed", { error: e }), "error");
     }
     setImporting(false);
   };
@@ -206,11 +208,11 @@ export default function WatchSourcesPage() {
     if (selectedIds.size === 0) return;
     try {
       await invoke("dismiss_discovered_leads", { ids: Array.from(selectedIds) });
-      showToast(`Dismissed ${selectedIds.size} lead${selectedIds.size > 1 ? "s" : ""}`, "success");
+      showToast(t("watchSources.dismissedCount", { count: selectedIds.size }), "success");
       setSelectedIds(new Set());
       await loadLeads(selectedSourceId);
     } catch {
-      showToast("Failed to dismiss", "error");
+      showToast(t("watchSources.failedDismiss"), "error");
     }
   };
 
@@ -222,16 +224,16 @@ export default function WatchSourcesPage() {
         discoveredId,
         useAi,
       });
-      showToast("Lead imported", "success");
+      showToast(t("watchSources.leadImported"), "success");
       await loadLeads(selectedSourceId);
     } catch (e) {
-      showToast(`Import failed: ${e}`, "error");
+      showToast(t("watchSources.importFailed", { error: e }), "error");
     }
     setImporting(false);
   };
 
   const formatDate = (iso: string | null) => {
-    if (!iso) return "Never";
+    if (!iso) return t("watchSources.never");
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   };
@@ -240,9 +242,9 @@ export default function WatchSourcesPage() {
     <main className="min-h-screen p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold">Sources</h1>
+          <h1 className="text-2xl font-bold">{t("watchSources.title")}</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Monitor job boards and import leads in bulk
+            {t("watchSources.subtitle")}
           </p>
         </header>
 
@@ -251,13 +253,13 @@ export default function WatchSourcesPage() {
           <div className="lg:col-span-1">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Watch Sources
+                {t("watchSources.title")}
               </h2>
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                {showAddForm ? "Cancel" : "+ Add"}
+                {showAddForm ? t("common.cancel") : `+ ${t("common.add")}`}
               </button>
             </div>
 
@@ -268,14 +270,14 @@ export default function WatchSourcesPage() {
                   type="text"
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
-                  placeholder="Source name (e.g., Malt - React)"
+                  placeholder={t("watchSources.namePlaceholder")}
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
                   type="url"
                   value={addUrl}
                   onChange={(e) => setAddUrl(e.target.value)}
-                  placeholder="https://www.malt.fr/s?q=react"
+                  placeholder={t("watchSources.urlPlaceholder")}
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -289,7 +291,7 @@ export default function WatchSourcesPage() {
                   disabled={addLoading}
                   className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {addLoading ? "Adding..." : "Add Source"}
+                  {addLoading ? t("common.loading") : t("watchSources.addSource")}
                 </button>
               </div>
             )}
@@ -331,13 +333,13 @@ export default function WatchSourcesPage() {
                           onClick={() => handleEdit(source.id)}
                           className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
                         >
-                          Save
+                          {t("common.save")}
                         </button>
                         <button
                           onClick={() => setEditingId(null)}
                           className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800"
                         >
-                          Cancel
+                          {t("common.cancel")}
                         </button>
                       </div>
                     </div>
@@ -354,9 +356,9 @@ export default function WatchSourcesPage() {
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {source.lastCheckedAt
-                            ? `Checked ${formatDate(source.lastCheckedAt)}`
-                            : "Never checked"}
-                          {source.lastFoundCount !== null && ` · ${source.lastFoundCount} new`}
+                            ? `${t("watchSources.lastChecked")} ${formatDate(source.lastCheckedAt)}`
+                            : t("watchSources.never")}
+                          {source.lastFoundCount !== null && ` · ${t("watchSources.found", { count: source.lastFoundCount })}`}
                         </span>
                         <div
                           className="flex items-center gap-1"
@@ -366,14 +368,14 @@ export default function WatchSourcesPage() {
                             onClick={() => handleCheck(source.id)}
                             disabled={checkingId === source.id}
                             className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 disabled:opacity-50 transition-colors"
-                            title="Check now"
+                            title={t("watchSources.check")}
                           >
                             {checkingId === source.id ? (
                               <span className="inline-flex items-center gap-1">
-                                <Spinner /> Checking...
+                                <Spinner /> {t("watchSources.checking")}
                               </span>
                             ) : (
-                              "Check"
+                              t("watchSources.check")
                             )}
                           </button>
                           <button
@@ -383,14 +385,14 @@ export default function WatchSourcesPage() {
                               setEditUrl(source.url);
                             }}
                             className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            title="Edit"
+                            title={t("common.edit")}
                           >
                             <PencilIcon />
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(source.id)}
                             className="p-1 text-gray-400 hover:text-red-500"
-                            title="Delete"
+                            title={t("common.delete")}
                           >
                             <TrashIcon />
                           </button>
@@ -420,7 +422,7 @@ export default function WatchSourcesPage() {
                             : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                         }`}
                       >
-                        {tab === "new" ? "New" : tab === "all" ? "All" : "Dismissed"}
+                        {tab === "new" ? t("watchSources.new") : tab === "all" ? t("common.all") : t("watchSources.dismissed")}
                       </button>
                     ))}
                   </div>
@@ -431,7 +433,7 @@ export default function WatchSourcesPage() {
                       onClick={toggleSelectAll}
                       className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                     >
-                      {selectedIds.size === leads.length ? "Deselect all" : "Select all"}
+                      {selectedIds.size === leads.length ? t("common.deselectAll") : t("common.selectAll")}
                     </button>
                   )}
                 </div>
@@ -440,7 +442,7 @@ export default function WatchSourcesPage() {
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      {selectedIds.size} selected
+                      {t("common.selected", { count: selectedIds.size })}
                     </span>
                     <div className="flex-1" />
                     <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
@@ -457,13 +459,13 @@ export default function WatchSourcesPage() {
                       disabled={importing}
                       className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                     >
-                      {importing ? "Importing..." : `Import ${selectedIds.size}`}
+                      {importing ? t("quickCapture.importing") : `${t("common.import")} ${selectedIds.size}`}
                     </button>
                     <button
                       onClick={handleDismiss}
                       className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg"
                     >
-                      Dismiss
+                      {t("watchSources.dismiss")}
                     </button>
                   </div>
                 )}
@@ -518,7 +520,7 @@ export default function WatchSourcesPage() {
 
                             <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                               {lead.client && <span>{lead.client}</span>}
-                              {lead.rate && <span>{lead.rate}€/day</span>}
+                              {lead.rate && <span>{lead.rate}{t("common.perDay")}</span>}
                               {lead.location && <span>{lead.location}</span>}
                             </div>
 
@@ -548,7 +550,7 @@ export default function WatchSourcesPage() {
                                 disabled={importing}
                                 className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                               >
-                                Import
+                                {t("watchSources.importLead")}
                               </button>
                             )}
                             {lead.status === "imported" && lead.importedLeadId && (
@@ -581,9 +583,9 @@ export default function WatchSourcesPage() {
 
       <ConfirmDialog
         open={deleteConfirm !== null}
-        title="Delete Source"
+        title={t("common.delete")}
         message="This will delete the source and all its discovered leads. This cannot be undone."
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete")}
         variant="danger"
         onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
         onCancel={() => setDeleteConfirm(null)}

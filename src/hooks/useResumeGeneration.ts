@@ -4,6 +4,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { pdf } from "@react-pdf/renderer";
 import { createElement } from "react";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import ResumeDocument from "@/components/ResumeDocument";
 import type { ResumeData } from "@/components/ResumeDocument";
@@ -21,6 +22,7 @@ interface ProfileInput {
 }
 
 export function useResumeGeneration() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [generating, setGenerating] = useState(false);
 
@@ -57,10 +59,10 @@ export function useResumeGeneration() {
       const arrayBuffer = await blob.arrayBuffer();
       await writeFile(filePath, new Uint8Array(arrayBuffer));
 
-      showToast("Resume exported successfully", "success");
+      showToast(t("profile.resumeExported"), "success");
     } catch (err) {
       console.error("Resume generation failed:", err);
-      showToast("Failed to generate resume", "error");
+      showToast(t("profile.failedExportResume"), "error");
     } finally {
       setGenerating(false);
     }

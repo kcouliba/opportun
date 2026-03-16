@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
 import type { Profile, Mission, Lead, FollowUpLead, DashboardForecast, DashboardAlert } from "@/types";
@@ -83,6 +84,7 @@ function computeDashboardData(
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [forecast, setForecast] = useState<DashboardForecast | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export default function DashboardPage() {
         setLoading(false);
       })
       .catch((err) => {
-        setError(typeof err === "string" ? err : "Failed to load dashboard");
+        setError(typeof err === "string" ? err : t("dashboard.failedToLoad"));
         setLoading(false);
       });
   };
@@ -116,7 +118,7 @@ export default function DashboardPage() {
   }
 
   if (error || !data) {
-    return <ErrorState message={error || "Failed to load dashboard"} onRetry={loadData} />;
+    return <ErrorState message={error || t("dashboard.failedToLoad")} onRetry={loadData} />;
   }
 
   const isSetUp = data.hasProfile;
@@ -127,32 +129,31 @@ export default function DashboardPage() {
         {/* Header */}
         <header className="mb-8">
           <h1 className="text-2xl font-bold mb-1">
-            {data.profileName ? `Welcome back, ${data.profileName.split(" ")[0]}` : "Dashboard"}
+            {data.profileName ? t("dashboard.welcome", { name: data.profileName.split(" ")[0] }) : t("dashboard.title")}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {isSetUp
-              ? "Your pipeline at a glance"
-              : "Set up your profile to get started"}
+              ? t("dashboard.subtitle")
+              : t("dashboard.setupProfile")}
           </p>
         </header>
 
         {!isSetUp ? (
           /* Getting Started - Show when not set up */
           <section className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Get Started</h2>
+            <h2 className="text-xl font-semibold mb-4">{t("dashboard.getStarted")}</h2>
             <ol className="space-y-4">
-              <Step number={1} title="Set up your profile" to="/profile" done={data.hasProfile}>
-                Add your skills, rate expectations, and deal-breakers.
-                This powers the smart filtering.
+              <Step number={1} title={t("dashboard.step1Title")} to="/profile" done={data.hasProfile}>
+                {t("dashboard.step1Desc")}
               </Step>
-              <Step number={2} title="Add your current mission" to="/missions/new" done={!!data.activeMission}>
-                Track when your income stops so you know when to act.
+              <Step number={2} title={t("dashboard.step2Title")} to="/missions/new" done={!!data.activeMission}>
+                {t("dashboard.step2Desc")}
               </Step>
-              <Step number={3} title="Add leads to your pipeline" to="/leads/new" done={data.pipelineCount > 0}>
-                Manual entry for now. We&apos;ll match them against your profile.
+              <Step number={3} title={t("dashboard.step3Title")} to="/leads/new" done={data.pipelineCount > 0}>
+                {t("dashboard.step3Desc")}
               </Step>
-              <Step number={4} title="Generate documents" to="/leads" done={false}>
-                One-click cover letters and key questions for qualified leads.
+              <Step number={4} title={t("dashboard.step4Title")} to="/leads" done={false}>
+                {t("dashboard.step4Desc")}
               </Step>
             </ol>
           </section>
@@ -162,20 +163,20 @@ export default function DashboardPage() {
             {/* Key Metrics */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <DashboardCard
-                title="Mission Ends In"
+                title={t("dashboard.missionEndsIn")}
                 value={
                   data.daysUntilEnd !== null
                     ? data.daysUntilEnd <= 0
-                      ? "Ended"
-                      : `${data.daysUntilEnd} days`
+                      ? t("common.ended")
+                      : t("dashboard.days", { count: data.daysUntilEnd })
                     : data.activeMission
-                    ? "Ongoing"
-                    : "No mission"
+                    ? t("common.ongoing")
+                    : t("dashboard.noMission")
                 }
                 subtitle={
                   data.daysUntilEnd !== null && data.daysUntilEnd <= 0
-                    ? "Mark as completed"
-                    : data.activeMission?.client || "Add your current work"
+                    ? t("dashboard.markCompleted")
+                    : data.activeMission?.client || t("dashboard.addWork")
                 }
                 to={
                   data.daysUntilEnd !== null && data.daysUntilEnd <= 0 && data.activeMission
@@ -197,20 +198,20 @@ export default function DashboardPage() {
                 }
               />
               <DashboardCard
-                title="Pipeline"
-                value={`${data.pipelineCount} leads`}
+                title={t("dashboard.pipelineTitle")}
+                value={t("dashboard.leads", { count: data.pipelineCount })}
                 subtitle={
                   data.qualifiedCount > 0
-                    ? `${data.qualifiedCount} qualified`
-                    : "No qualified leads yet"
+                    ? t("dashboard.qualifiedLeads", { count: data.qualifiedCount })
+                    : t("dashboard.noQualified")
                 }
                 to="/leads"
                 variant={data.pipelineCount === 0 ? "warning" : "default"}
               />
               <DashboardCard
-                title="High Match"
-                value={`${data.highMatchCount} leads`}
-                subtitle="70%+ match score"
+                title={t("dashboard.highMatch")}
+                value={t("dashboard.leads", { count: data.highMatchCount })}
+                subtitle={t("dashboard.highMatchDesc")}
                 to="/leads"
                 variant={data.highMatchCount > 0 ? "success" : "default"}
               />
@@ -231,23 +232,23 @@ export default function DashboardPage() {
               <section className="mb-8">
                 <div className="flex justify-between items-center mb-4">
                   <div>
-                    <h2 className="text-lg font-semibold">Follow-ups</h2>
+                    <h2 className="text-lg font-semibold">{t("dashboard.followUps")}</h2>
                     <p className="text-sm text-gray-500">
                       {data.overdueCount > 0 && (
-                        <span className="text-red-600 font-medium">{data.overdueCount} overdue</span>
+                        <span className="text-red-600 font-medium">{t("dashboard.overdue", { count: data.overdueCount })}</span>
                       )}
                       {data.overdueCount > 0 && data.todayCount > 0 && " · "}
                       {data.todayCount > 0 && (
-                        <span className="text-amber-600 font-medium">{data.todayCount} today</span>
+                        <span className="text-amber-600 font-medium">{t("dashboard.todayCount", { count: data.todayCount })}</span>
                       )}
                       {(data.overdueCount > 0 || data.todayCount > 0) && data.totalFollowUps > data.overdueCount + data.todayCount && " · "}
                       {data.totalFollowUps > data.overdueCount + data.todayCount && (
-                        <span>{data.totalFollowUps - data.overdueCount - data.todayCount} upcoming</span>
+                        <span>{t("dashboard.upcoming", { count: data.totalFollowUps - data.overdueCount - data.todayCount })}</span>
                       )}
                     </p>
                   </div>
                   <Link to="/leads" className="text-sm text-blue-600 hover:text-blue-700">
-                    View all →
+                    {t("dashboard.viewAll")}
                   </Link>
                 </div>
                 <div className="space-y-2">
@@ -282,10 +283,10 @@ export default function DashboardPage() {
                             }`}
                           >
                             {lead.isOverdue
-                              ? `${Math.abs(lead.daysUntil)}d overdue`
+                              ? t("dashboard.daysOverdue", { count: Math.abs(lead.daysUntil) })
                               : lead.isToday
-                              ? "Today"
-                              : `in ${lead.daysUntil}d`}
+                              ? t("common.today")
+                              : t("dashboard.inDays", { count: lead.daysUntil })}
                           </span>
                           {lead.contactInfo && (
                             <p className="text-xs text-gray-400 mt-1">{lead.contactInfo}</p>
@@ -302,9 +303,9 @@ export default function DashboardPage() {
             {data.recentLeads.length > 0 && data.followUps.length === 0 && (
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-semibold">Recent Leads</h2>
+                  <h2 className="text-lg font-semibold">{t("dashboard.recentLeads")}</h2>
                   <Link to="/leads" className="text-sm text-blue-600 hover:text-blue-700">
-                    View all →
+                    {t("dashboard.viewAll")}
                   </Link>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
@@ -346,6 +347,7 @@ export default function DashboardPage() {
 }
 
 function AlertsSection({ alerts }: { alerts: DashboardAlert[] }) {
+  const { t } = useTranslation();
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? alerts : alerts.slice(0, 4);
 
@@ -387,7 +389,7 @@ function AlertsSection({ alerts }: { alerts: DashboardAlert[] }) {
           onClick={() => setShowAll(true)}
           className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
         >
-          Show all ({alerts.length}) →
+          {t("dashboard.showAll", { count: alerts.length })}
         </button>
       )}
     </section>
@@ -395,6 +397,7 @@ function AlertsSection({ alerts }: { alerts: DashboardAlert[] }) {
 }
 
 function IncomeForecastSection({ forecast }: { forecast: DashboardForecast }) {
+  const { t } = useTranslation();
   const { securedIncome, pipelineIncome, monthlyProjection } = forecast;
   const hasData = securedIncome.missions.length > 0 || pipelineIncome.totalWeighted > 0;
 
@@ -407,26 +410,26 @@ function IncomeForecastSection({ forecast }: { forecast: DashboardForecast }) {
 
   return (
     <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4">Income Forecast</h2>
+      <h2 className="text-lg font-semibold mb-4">{t("dashboard.incomeForecast")}</h2>
 
       {/* Income summary - 2 column grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Secured Income</h3>
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t("dashboard.securedIncome")}</h3>
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">
             {formatEuro(securedIncome.total)}
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            ~{formatEuro(securedIncome.monthlyAvg)}/mo from active missions
+            {t("dashboard.securedDesc", { amount: formatEuro(securedIncome.monthlyAvg) })}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Pipeline (weighted)</h3>
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t("dashboard.pipelineWeighted")}</h3>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
             {formatEuro(pipelineIncome.totalWeighted)}
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            qualified @ 30%, negotiating @ 60%
+            {t("dashboard.pipelineWeightedDesc")}
           </p>
         </div>
       </div>
@@ -434,7 +437,7 @@ function IncomeForecastSection({ forecast }: { forecast: DashboardForecast }) {
       {/* Monthly projection bars */}
       {monthlyProjection.some((m) => m.secured > 0 || m.potential > 0) && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">6-Month Projection</h3>
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">{t("dashboard.projection")}</h3>
           <div className="space-y-3">
             {monthlyProjection.map((m) => {
               const total = m.secured + m.potential;
@@ -470,11 +473,11 @@ function IncomeForecastSection({ forecast }: { forecast: DashboardForecast }) {
           <div className="flex gap-4 mt-4 text-xs text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" />
-              Secured
+              {t("dashboard.secured")}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-blue-400/60 inline-block" />
-              Potential
+              {t("dashboard.potential")}
             </span>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
@@ -8,6 +9,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import type { Mission } from "@/types/index";
 
 export default function MissionDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -59,11 +61,11 @@ export default function MissionDetailPage() {
 
   const handleSave = async () => {
     if (!form.title.trim()) {
-      showToast("Title is required", "error");
+      showToast(t("newMission.titleRequired"), "error");
       return;
     }
     if (!form.client.trim()) {
-      showToast("Client is required", "error");
+      showToast(t("newMission.clientRequired"), "error");
       return;
     }
 
@@ -73,9 +75,9 @@ export default function MissionDetailPage() {
       const updated = await invoke<Mission>("update_mission", { id, data: form });
       setMission(updated);
       setEditing(false);
-      showToast("Mission updated", "success");
+      showToast(t("missions.missionUpdated"), "success");
     } catch {
-      showToast("Failed to update mission", "error");
+      showToast(t("missions.failedUpdate"), "error");
     }
     setSaving(false);
   };
@@ -83,10 +85,10 @@ export default function MissionDetailPage() {
   const handleDelete = async () => {
     try {
       await invoke("delete_mission", { id });
-      showToast("Mission deleted", "success");
+      showToast(t("missions.missionDeleted"), "success");
       navigate("/missions");
     } catch {
-      showToast("Failed to delete mission", "error");
+      showToast(t("missions.failedDelete"), "error");
       setShowDeleteConfirm(false);
     }
   };
@@ -102,9 +104,9 @@ export default function MissionDetailPage() {
       });
 
       setMission({ ...mission!, status: "completed" });
-      showToast("Mission marked as completed", "success");
+      showToast(t("missions.missionUpdated"), "success");
     } catch {
-      showToast("Failed to update mission", "error");
+      showToast(t("missions.failedUpdate"), "error");
     }
     setSaving(false);
   };
@@ -120,7 +122,7 @@ export default function MissionDetailPage() {
   if (!mission) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Mission not found</p>
+        <p className="text-gray-500">{t("common.noResults")}</p>
       </div>
     );
   }
@@ -142,7 +144,7 @@ export default function MissionDetailPage() {
         {/* Header */}
         <header className="mb-8">
           <Breadcrumbs items={[
-            { label: "Missions", to: "/missions" },
+            { label: t("missions.title"), to: "/missions" },
             { label: mission.client },
             { label: mission.title },
           ]} />
@@ -161,7 +163,7 @@ export default function MissionDetailPage() {
                     : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
                 }`}
               >
-                {mission.status}
+                {t(`missions.${mission.status}`)}
               </span>
             </div>
           </div>
@@ -171,11 +173,11 @@ export default function MissionDetailPage() {
         {mission.status === "active" && (
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-              <p className="text-sm text-gray-500">Daily Rate</p>
+              <p className="text-sm text-gray-500">{t("missions.dailyRate")}</p>
               <p className="text-xl font-bold">{mission.rate}€</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-              <p className="text-sm text-gray-500">Days/Week</p>
+              <p className="text-sm text-gray-500">{t("missions.daysPerWeek")}</p>
               <p className="text-xl font-bold">{mission.daysPerWeek}</p>
             </div>
             <div
@@ -187,9 +189,9 @@ export default function MissionDetailPage() {
                   : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
               }`}
             >
-              <p className="text-sm text-gray-500">Ends In</p>
+              <p className="text-sm text-gray-500">{t("missions.endDate")}</p>
               <p className="text-xl font-bold">
-                {daysUntilEnd !== null ? (daysUntilEnd <= 0 ? "Ended" : `${daysUntilEnd}d`) : "Ongoing"}
+                {daysUntilEnd !== null ? (daysUntilEnd <= 0 ? t("common.ended") : `${daysUntilEnd}d`) : t("common.ongoing")}
               </p>
             </div>
           </div>
@@ -198,9 +200,9 @@ export default function MissionDetailPage() {
         {/* Edit Form or Details */}
         {editing ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="font-semibold mb-4">Edit Mission</h2>
+            <h2 className="font-semibold mb-4">{t("missions.missionDetails")}</h2>
             <div className="space-y-4">
-              <Field label="Title">
+              <Field label={t("missions.missionTitle")}>
                 <input
                   type="text"
                   value={form.title}
@@ -208,7 +210,7 @@ export default function MissionDetailPage() {
                   className="input"
                 />
               </Field>
-              <Field label="Client">
+              <Field label={t("missions.client")}>
                 <input
                   type="text"
                   value={form.client}
@@ -216,7 +218,7 @@ export default function MissionDetailPage() {
                   className="input"
                 />
               </Field>
-              <Field label="Description">
+              <Field label={t("missions.description")}>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -224,7 +226,7 @@ export default function MissionDetailPage() {
                 />
               </Field>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Start Date">
+                <Field label={t("missions.startDate")}>
                   <input
                     type="date"
                     value={form.startDate}
@@ -232,7 +234,7 @@ export default function MissionDetailPage() {
                     className="input"
                   />
                 </Field>
-                <Field label="End Date">
+                <Field label={t("missions.endDate")}>
                   <input
                     type="date"
                     value={form.endDate}
@@ -242,7 +244,7 @@ export default function MissionDetailPage() {
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Daily Rate">
+                <Field label={t("missions.dailyRate")}>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -250,10 +252,10 @@ export default function MissionDetailPage() {
                       onChange={(e) => setForm({ ...form, rate: parseInt(e.target.value) || 0 })}
                       className="input w-28"
                     />
-                    <span className="text-gray-500">€/day</span>
+                    <span className="text-gray-500">{t("common.perDay")}</span>
                   </div>
                 </Field>
-                <Field label="Days per Week">
+                <Field label={t("missions.daysPerWeek")}>
                   <select
                     value={form.daysPerWeek}
                     onChange={(e) => setForm({ ...form, daysPerWeek: parseFloat(e.target.value) })}
@@ -269,14 +271,14 @@ export default function MissionDetailPage() {
                   </select>
                 </Field>
               </div>
-              <Field label="Status">
+              <Field label={t("missions.status")}>
                 <select
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                   className="input w-40"
                 >
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
+                  <option value="active">{t("missions.active")}</option>
+                  <option value="completed">{t("missions.completed")}</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
               </Field>
@@ -284,7 +286,7 @@ export default function MissionDetailPage() {
               {estimatedRevenue && (
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
-                    Estimated revenue: <strong>{estimatedRevenue.toLocaleString()}€</strong>
+                    {t("missions.estimatedRevenue", { amount: estimatedRevenue.toLocaleString() })}
                   </p>
                 </div>
               )}
@@ -295,13 +297,13 @@ export default function MissionDetailPage() {
                   disabled={saving}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : "Save Changes"}
+                  {saving ? t("common.saving") : t("common.save")}
                 </button>
                 <button
                   onClick={() => setEditing(false)}
                   className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -310,24 +312,24 @@ export default function MissionDetailPage() {
           <div className="space-y-6">
             {/* Details */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="font-semibold mb-4">Details</h2>
+              <h2 className="font-semibold mb-4">{t("missions.missionDetails")}</h2>
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">Period</dt>
+                  <dt className="text-gray-500">{t("missions.timeline")}</dt>
                   <dd>
                     {new Date(mission.startDate).toLocaleDateString()} →{" "}
                     {mission.endDate
                       ? new Date(mission.endDate).toLocaleDateString()
-                      : "Ongoing"}
+                      : t("common.ongoing")}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">Rate</dt>
-                  <dd>{mission.rate}€/day × {mission.daysPerWeek} days/week</dd>
+                  <dt className="text-gray-500">{t("missions.dailyRate")}</dt>
+                  <dd>{mission.rate}{t("common.perDay")} × {mission.daysPerWeek} {t("common.days")}/week</dd>
                 </div>
                 {mission.description && (
                   <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                    <dt className="text-gray-500 mb-1">Description</dt>
+                    <dt className="text-gray-500 mb-1">{t("missions.description")}</dt>
                     <dd className="text-gray-700 dark:text-gray-300">{mission.description}</dd>
                   </div>
                 )}
@@ -342,7 +344,7 @@ export default function MissionDetailPage() {
                   onClick={() => setEditing(true)}
                   className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
-                  Edit Mission
+                  {t("common.edit")}
                 </button>
                 {mission.status === "active" && (
                   <button
@@ -350,26 +352,26 @@ export default function MissionDetailPage() {
                     disabled={saving}
                     className="w-full py-2 px-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
                   >
-                    {saving ? "Updating..." : "Mark as Completed"}
+                    {saving ? t("common.saving") : t("missions.markCompleted")}
                   </button>
                 )}
                 {showDeleteConfirm ? (
                   <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
                     <p className="text-sm text-red-800 dark:text-red-200 mb-3">
-                      Are you sure you want to delete this mission?
+                      {t("common.confirm")}?
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={handleDelete}
                         className="px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
                       >
-                        Yes, delete
+                        {t("common.delete")}
                       </button>
                       <button
                         onClick={() => setShowDeleteConfirm(false)}
                         className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md text-sm hover:bg-gray-200 dark:hover:bg-gray-600"
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                     </div>
                   </div>
@@ -378,7 +380,7 @@ export default function MissionDetailPage() {
                     onClick={() => setShowDeleteConfirm(true)}
                     className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                   >
-                    Delete Mission
+                    {t("common.delete")}
                   </button>
                 )}
               </div>

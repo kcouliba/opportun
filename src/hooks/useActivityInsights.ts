@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useAiQueue } from "@/components/AiQueue";
 import type { ActivityInsight, Document } from "@/types/index";
 
@@ -7,13 +8,14 @@ export function useActivityInsights() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { enqueue } = useAiQueue();
+  const { i18n } = useTranslation();
 
   const analyzeActivities = useCallback(async (leadId: string) => {
     setAnalyzing(true);
     setError(null);
 
     try {
-      const result = await enqueue<ActivityInsight>("analyze_activities_ai", { leadId }, "Analyzing activities");
+      const result = await enqueue<ActivityInsight>("analyze_activities_ai", { leadId, locale: i18n.language }, "Analyzing activities");
       setInsight(result);
       setAnalyzing(false);
       return result;

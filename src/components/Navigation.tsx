@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 
 interface DashboardStats {
   missionDaysLeft: number | null;
@@ -16,6 +17,7 @@ interface SyncInfo {
 }
 
 export default function Navigation() {
+  const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
   const [stats, setStats] = useState<DashboardStats>({
@@ -119,19 +121,19 @@ export default function Navigation() {
 
         {/* Main nav */}
         <div className="flex-1 flex flex-col py-2 px-2 gap-1 overflow-y-auto">
-          <SidebarLink to="/" icon={<HomeIcon />} label="Dashboard" active={isActive("/") && pathname === "/"} />
-          <SidebarLink to="/leads" icon={<PipelineIcon />} label="Pipeline" active={isActive("/leads")} badge={stats.pipelineCount || undefined} badgeColor="blue" />
-          <SidebarLink to="/sources" icon={<SourcesIcon />} label="Sources" active={isActive("/sources")} badge={newDiscoveredCount || undefined} badgeColor="green" />
-          <SidebarLink to="/activities" icon={<ActivityIcon />} label="Activity" active={isActive("/activities")} />
-          <SidebarLink to="/missions" icon={<BriefcaseIcon />} label="Missions" active={isActive("/missions")} />
-          <SidebarLink to="/analytics" icon={<ChartIcon />} label="Analytics" active={isActive("/analytics")} />
+          <SidebarLink to="/" icon={<HomeIcon />} label={t("nav.dashboard")} active={isActive("/") && pathname === "/"} />
+          <SidebarLink to="/leads" icon={<PipelineIcon />} label={t("nav.pipeline")} active={isActive("/leads")} badge={stats.pipelineCount || undefined} badgeColor="blue" />
+          <SidebarLink to="/sources" icon={<SourcesIcon />} label={t("nav.sources")} active={isActive("/sources")} badge={newDiscoveredCount || undefined} badgeColor="green" />
+          <SidebarLink to="/activities" icon={<ActivityIcon />} label={t("nav.activity")} active={isActive("/activities")} />
+          <SidebarLink to="/missions" icon={<BriefcaseIcon />} label={t("nav.missions")} active={isActive("/missions")} />
+          <SidebarLink to="/analytics" icon={<ChartIcon />} label={t("nav.analytics")} active={isActive("/analytics")} />
 
           {/* Separator */}
           <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
 
           {/* Secondary nav */}
-          <SidebarLink to="/profile" icon={<UserIcon />} label="Profile" active={isActive("/profile")} />
-          <SidebarLink to="/settings" icon={<GearIcon />} label="Settings" active={isActive("/settings")} syncDot={syncInfo.available ? syncDotColor : undefined} />
+          <SidebarLink to="/profile" icon={<UserIcon />} label={t("nav.profile")} active={isActive("/profile")} />
+          <SidebarLink to="/settings" icon={<GearIcon />} label={t("nav.settings")} active={isActive("/settings")} syncDot={syncInfo.available ? syncDotColor : undefined} />
         </div>
 
         {/* Bottom section */}
@@ -140,21 +142,21 @@ export default function Navigation() {
           <div className="hidden lg:block px-2 text-sm">
             {stats.missionDaysLeft !== null ? (
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 dark:text-gray-400">Mission:</span>
+                <span className="text-gray-500 dark:text-gray-400">{t("nav.missionLabel")}</span>
                 <span className={`font-semibold ${urgencyColor}`}>
-                  {stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d` : "Ended"}
+                  {stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d` : t("common.ended")}
                 </span>
               </div>
             ) : (
-              <span className="text-gray-400">No active mission</span>
+              <span className="text-gray-400">{t("nav.noActiveMission")}</span>
             )}
           </div>
           {/* Mission urgency dot — collapsed */}
           <div className="flex lg:hidden justify-center">
             <span className={`w-2.5 h-2.5 rounded-full ${urgencyDotColor}`} title={
               stats.missionDaysLeft !== null
-                ? `Mission: ${stats.missionDaysLeft > 0 ? `${stats.missionDaysLeft}d left` : "Ended"}`
-                : "No active mission"
+                ? `${t("nav.missionLabel")} ${stats.missionDaysLeft > 0 ? t("nav.daysLeft", { count: stats.missionDaysLeft }) : t("common.ended")}`
+                : t("nav.noActiveMission")
             } />
           </div>
 
@@ -164,7 +166,7 @@ export default function Navigation() {
             className="flex items-center justify-center lg:justify-start gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
           >
             <PlusIcon />
-            <span className="hidden lg:inline">Quick Add</span>
+            <span className="hidden lg:inline">{t("nav.quickAdd")}</span>
           </Link>
         </div>
       </nav>
@@ -174,41 +176,41 @@ export default function Navigation() {
         <div className="flex px-4">
           <MobileNavLink to="/" active={isActive("/") && pathname === "/"}>
             <HomeIcon />
-            <span>Home</span>
+            <span>{t("nav.home")}</span>
           </MobileNavLink>
           <MobileNavLink to="/leads" active={isActive("/leads")}>
             <PipelineIcon />
-            <span>Pipeline</span>
+            <span>{t("nav.pipeline")}</span>
             {stats.pipelineCount > 0 && (
               <span className="ml-1 text-xs text-blue-600">{stats.pipelineCount}</span>
             )}
           </MobileNavLink>
           <MobileNavLink to="/sources" active={isActive("/sources")}>
             <SourcesIcon />
-            <span>Sources</span>
+            <span>{t("nav.sources")}</span>
             {newDiscoveredCount > 0 && (
               <span className="ml-1 text-xs text-green-600">{newDiscoveredCount}</span>
             )}
           </MobileNavLink>
           <MobileNavLink to="/activities" active={isActive("/activities")}>
             <ActivityIcon />
-            <span>Activity</span>
+            <span>{t("nav.activity")}</span>
           </MobileNavLink>
           <MobileNavLink to="/missions" active={isActive("/missions")}>
             <BriefcaseIcon />
-            <span>Missions</span>
+            <span>{t("nav.missions")}</span>
           </MobileNavLink>
           <MobileNavLink to="/analytics" active={isActive("/analytics")}>
             <ChartIcon />
-            <span>Analytics</span>
+            <span>{t("nav.analytics")}</span>
           </MobileNavLink>
           <MobileNavLink to="/profile" active={isActive("/profile")}>
             <UserIcon />
-            <span>Profile</span>
+            <span>{t("nav.profile")}</span>
           </MobileNavLink>
           <MobileNavLink to="/settings" active={isActive("/settings")}>
             <GearIcon />
-            <span>Settings</span>
+            <span>{t("nav.settings")}</span>
           </MobileNavLink>
         </div>
       </nav>

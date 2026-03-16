@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useAiQueue } from "@/components/AiQueue";
 import type { LeadAnalysis, Document } from "@/types/index";
 
@@ -7,13 +8,14 @@ export function useAiAnalysis() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { enqueue } = useAiQueue();
+  const { i18n } = useTranslation();
 
   const analyzeLead = useCallback(async (leadId: string) => {
     setAnalyzing(true);
     setError(null);
 
     try {
-      const result = await enqueue<LeadAnalysis>("analyze_lead_ai", { leadId }, "Analyzing lead");
+      const result = await enqueue<LeadAnalysis>("analyze_lead_ai", { leadId, locale: i18n.language }, "Analyzing lead");
       setAnalysis(result);
       setAnalyzing(false);
       return result;

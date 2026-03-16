@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { PageLoader } from "@/components/LoadingSpinner";
 import type { ActivityWithLead, PaginatedResponse } from "@/types/index";
 
-const activityTypes: Record<string, { label: string; icon: string }> = {
-  call: { label: "Call", icon: "\ud83d\udcde" },
-  email: { label: "Email", icon: "\ud83d\udce7" },
-  meeting: { label: "Meeting", icon: "\ud83e\udd1d" },
-  interview: { label: "Interview", icon: "\ud83d\udcbc" },
-  note: { label: "Note", icon: "\ud83d\udcdd" },
-  other: { label: "Other", icon: "\ud83d\udccb" },
+const activityTypeIcons: Record<string, string> = {
+  call: "\ud83d\udcde",
+  email: "\ud83d\udce7",
+  meeting: "\ud83e\udd1d",
+  interview: "\ud83d\udcbc",
+  note: "\ud83d\udcdd",
+  other: "\ud83d\udccb",
 };
 
 function formatTime(dateString: string): string {
@@ -30,22 +31,22 @@ function getDateGroup(dateString: string): string {
   const activityDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   if (activityDate.getTime() === today.getTime()) {
-    return "Today";
+    return "today";
   } else if (activityDate.getTime() === yesterday.getTime()) {
-    return "Yesterday";
+    return "yesterday";
   } else if (activityDate >= weekAgo) {
-    return "This Week";
+    return "thisWeek";
   } else {
-    return "Earlier";
+    return "earlier";
   }
 }
 
 function groupActivitiesByDate(activities: ActivityWithLead[]): Record<string, ActivityWithLead[]> {
   const groups: Record<string, ActivityWithLead[]> = {
-    Today: [],
-    Yesterday: [],
-    "This Week": [],
-    Earlier: [],
+    today: [],
+    yesterday: [],
+    thisWeek: [],
+    earlier: [],
   };
 
   activities.forEach((activity) => {
@@ -57,6 +58,7 @@ function groupActivitiesByDate(activities: ActivityWithLead[]): Record<string, A
 }
 
 export default function ActivitiesPage() {
+  const { t } = useTranslation();
   const [activities, setActivities] = useState<ActivityWithLead[]>([]);
   const [pagination, setPagination] = useState<PaginatedResponse<ActivityWithLead>["pagination"] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,7 +126,7 @@ export default function ActivitiesPage() {
 
   const hasFilters = typeFilter || fromDate || toDate;
   const groupedActivities = groupActivitiesByDate(activities);
-  const groupOrder = ["Today", "Yesterday", "This Week", "Earlier"];
+  const groupOrder = ["today", "yesterday", "thisWeek", "earlier"];
 
   if (loading && activities.length === 0) {
     return <PageLoader />;
@@ -135,9 +137,9 @@ export default function ActivitiesPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Activity Timeline</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("activities.title")}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Recent interactions across all leads
+            {t("activities.subtitle")}
           </p>
         </header>
 
@@ -147,17 +149,17 @@ export default function ActivitiesPage() {
             {/* Type Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Type
+                {t("activities.type")}
               </label>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 min-w-[150px]"
               >
-                <option value="">All types</option>
-                {Object.entries(activityTypes).map(([value, { label, icon }]) => (
+                <option value="">{t("activities.allTypes")}</option>
+                {Object.entries(activityTypeIcons).map(([value, icon]) => (
                   <option key={value} value={value}>
-                    {icon} {label}
+                    {icon} {t(`activityTypes.${value}`)}
                   </option>
                 ))}
               </select>
@@ -166,7 +168,7 @@ export default function ActivitiesPage() {
             {/* From Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                From
+                {t("activities.from")}
               </label>
               <input
                 type="date"
@@ -179,7 +181,7 @@ export default function ActivitiesPage() {
             {/* To Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                To
+                {t("activities.to")}
               </label>
               <input
                 type="date"
@@ -195,7 +197,7 @@ export default function ActivitiesPage() {
                 onClick={clearFilters}
                 className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
-                Clear filters
+                {t("activities.clearFilters")}
               </button>
             )}
           </div>
@@ -204,13 +206,13 @@ export default function ActivitiesPage() {
         {/* Timeline */}
         {activities.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-500 dark:text-gray-400">No activities found</p>
+            <p className="text-gray-500 dark:text-gray-400">{t("activities.noActivities")}</p>
             {hasFilters && (
               <button
                 onClick={clearFilters}
                 className="mt-2 text-blue-600 hover:text-blue-700"
               >
-                Clear filters
+                {t("activities.clearFilters")}
               </button>
             )}
           </div>
@@ -224,7 +226,7 @@ export default function ActivitiesPage() {
                 <div key={groupName}>
                   {/* Group Header */}
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
-                    {groupName}
+                    {t(`common.${groupName}`)}
                   </h2>
 
                   {/* Activities */}
@@ -245,7 +247,7 @@ export default function ActivitiesPage() {
                   disabled={loadingMore}
                   className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
                 >
-                  {loadingMore ? "Loading..." : "Load more"}
+                  {loadingMore ? t("common.loading") : t("common.loadMore")}
                 </button>
               </div>
             )}
@@ -253,7 +255,7 @@ export default function ActivitiesPage() {
             {/* Total count */}
             {pagination && (
               <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-                Showing {activities.length} of {pagination.total} activities
+                {t("activities.showing", { count: activities.length, total: pagination.total })}
               </p>
             )}
           </div>
@@ -264,13 +266,14 @@ export default function ActivitiesPage() {
 }
 
 function ActivityItem({ activity }: { activity: ActivityWithLead }) {
-  const typeInfo = activityTypes[activity.type] || activityTypes.other;
+  const { t } = useTranslation();
+  const icon = activityTypeIcons[activity.type] || activityTypeIcons.other;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex gap-3">
         {/* Icon */}
-        <div className="flex-shrink-0 text-2xl">{typeInfo.icon}</div>
+        <div className="flex-shrink-0 text-2xl">{icon}</div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -279,7 +282,7 @@ function ActivityItem({ activity }: { activity: ActivityWithLead }) {
               {/* Type badge and title */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                  {typeInfo.label}
+                  {t(`activityTypes.${activity.type}`, activity.type)}
                 </span>
                 <span className="font-medium text-gray-900 dark:text-white truncate">
                   {activity.title}

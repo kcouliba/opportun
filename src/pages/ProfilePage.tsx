@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
@@ -93,6 +94,7 @@ function dedupeEducation(existing: EducationEntry[], incoming: EducationEntry[])
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [profile, setProfile] = useState<ProfileForm>(defaultProfile);
   const [loading, setLoading] = useState(true);
@@ -168,8 +170,8 @@ export default function ProfilePage() {
       setMissionFromYear("");
     }
     const missionCount = data.missions?.length ?? 0;
-    const missionMsg = missionCount > 0 ? ` — ${missionCount} missions found` : "";
-    showToast(`Profile data imported${missionMsg} — review and save`, "success");
+    const missionMsg = missionCount > 0 ? ` — ${missionCount} missions` : "";
+    showToast(t("profile.dataImported", { missionMsg }), "success");
   };
 
   const handleImportFile = async () => {
@@ -218,7 +220,7 @@ export default function ProfilePage() {
     e.preventDefault();
 
     if (!profile.name.trim()) {
-      showToast("Name is required", "error");
+      showToast(t("profile.nameRequired"), "error");
       return;
     }
 
@@ -266,19 +268,19 @@ export default function ProfilePage() {
           }
         }
         if (created > 0) {
-          showToast(`Profile saved — ${created} missions imported`, "success");
+          showToast(t("profile.profileSavedWithMissions", { count: created }), "success");
         } else {
-          showToast("Profile saved successfully", "success");
+          showToast(t("profile.profileSaved"), "success");
         }
         setImportedMissions([]);
         setSelectedMissions(new Set());
       } else {
-        showToast("Profile saved successfully", "success");
+        showToast(t("profile.profileSaved"), "success");
       }
 
       setSaving(false);
     } catch {
-      showToast("An error occurred while saving", "error");
+      showToast(t("profile.failedSave"), "error");
       setSaving(false);
     }
   };
@@ -318,9 +320,9 @@ export default function ProfilePage() {
       <div className="max-w-2xl mx-auto">
         <header className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-2">Your Profile</h1>
+            <h1 className="text-2xl font-bold mb-2">{t("profile.title")}</h1>
             <p className="text-gray-600 dark:text-gray-400">
-              This powers the smart filtering. Leads will be scored against your preferences.
+              {t("profile.subtitle")}
             </p>
           </div>
           <button
@@ -329,7 +331,7 @@ export default function ProfilePage() {
             disabled={generating || !profile.name}
             className="btn btn-secondary whitespace-nowrap"
           >
-            {generating ? "Generating..." : "Export Resume (PDF)"}
+            {generating ? t("profile.generating") : t("profile.exportResume")}
           </button>
         </header>
 
@@ -338,7 +340,7 @@ export default function ProfilePage() {
           onFileDrop={handleFileDrop}
           onError={(msg) => showToast(msg, "error")}
           enabled={!importing}
-          label="Drop profile document here"
+          label={t("profile.dropProfile")}
         >
         <section className="mb-8">
           <button
@@ -347,7 +349,7 @@ export default function ProfilePage() {
             className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             <span>{importOpen ? "▾" : "▸"}</span>
-            Import Profile
+            {t("profile.importProfile")}
           </button>
 
           {importOpen && (
@@ -363,7 +365,7 @@ export default function ProfilePage() {
                       : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}
                 >
-                  LinkedIn
+                  {t("profile.linkedin")}
                 </button>
                 <button
                   type="button"
@@ -374,9 +376,9 @@ export default function ProfilePage() {
                       : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}
                 >
-                  Resume / CV
+                  {t("profile.resume")}
                   <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
-                    AI
+                    {t("profile.ai")}
                   </span>
                 </button>
               </div>
@@ -389,17 +391,17 @@ export default function ProfilePage() {
                   className="btn btn-secondary text-sm"
                 >
                   {importing
-                    ? "Parsing..."
+                    ? t("profile.parsing")
                     : importTab === "resume"
-                      ? "Upload Resume"
-                      : "Upload LinkedIn PDF"}
+                      ? t("profile.uploadResume")
+                      : t("profile.uploadLinkedin")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPasteOpen(!pasteOpen)}
                   className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
-                  {pasteOpen ? "Hide paste" : "Or paste text"}
+                  {pasteOpen ? t("profile.hidePaste") : t("profile.pasteText")}
                 </button>
               </div>
 
@@ -411,8 +413,8 @@ export default function ProfilePage() {
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   placeholder={
                     importTab === "resume"
-                      ? "Or paste resume file path"
-                      : "Or paste file path from Explorer"
+                      ? t("profile.pasteResumeFilePath")
+                      : t("profile.pasteFilePath")
                   }
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -427,7 +429,7 @@ export default function ProfilePage() {
                   disabled={importing || !pathInput.trim()}
                   className="btn btn-secondary text-sm"
                 >
-                  Import
+                  {t("common.import")}
                 </button>
               </div>
 
@@ -439,8 +441,8 @@ export default function ProfilePage() {
                     className="input w-full h-32 text-sm"
                     placeholder={
                       importTab === "resume"
-                        ? "Paste your resume / CV text here..."
-                        : "Paste your LinkedIn profile text here..."
+                        ? t("profile.pasteResumePlaceholder")
+                        : t("profile.pasteLinkedinPlaceholder")
                     }
                   />
                   <button
@@ -449,7 +451,7 @@ export default function ProfilePage() {
                     disabled={importing || !pasteText.trim()}
                     className="btn btn-secondary text-sm"
                   >
-                    {importing ? "Parsing..." : "Parse"}
+                    {importing ? t("profile.parsing") : t("profile.parse")}
                   </button>
                 </div>
               )}
@@ -460,8 +462,8 @@ export default function ProfilePage() {
 
               <p className="text-xs text-gray-500">
                 {importTab === "resume"
-                  ? "Uses AI to extract profile data. Falls back to regex if AI is unavailable."
-                  : "Extracted data will auto-fill empty fields. Existing data is preserved."}
+                  ? t("profile.parseHint")
+                  : t("profile.importHint")}
               </p>
             </div>
           )}
@@ -470,26 +472,26 @@ export default function ProfilePage() {
             <div className="mt-3 p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  {selectedMissions.size}/{importedMissions.length} missions selected
+                  {t("profile.missionsSelected", { selected: selectedMissions.size, total: importedMissions.length })}
                 </p>
                 <button
                   type="button"
                   onClick={() => { setImportedMissions([]); setSelectedMissions(new Set()); }}
                   className="text-xs text-gray-500 hover:text-red-600"
                 >
-                  Dismiss all
+                  {t("profile.dismissAll")}
                 </button>
               </div>
 
               {/* Filter + bulk actions */}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <label className="text-xs text-gray-600 dark:text-gray-400">From year:</label>
+                  <label className="text-xs text-gray-600 dark:text-gray-400">{t("profile.fromYear")}</label>
                   <input
                     type="number"
                     min="1990"
                     max="2030"
-                    placeholder="All"
+                    placeholder={t("common.all")}
                     value={missionFromYear}
                     onChange={(e) => {
                       const year = e.target.value;
@@ -513,14 +515,14 @@ export default function ProfilePage() {
                   onClick={() => setSelectedMissions(new Set(importedMissions.map((_, i) => i)))}
                   className="text-xs text-blue-600 hover:text-blue-700"
                 >
-                  Select all
+                  {t("common.selectAll")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedMissions(new Set())}
                   className="text-xs text-blue-600 hover:text-blue-700"
                 >
-                  Deselect all
+                  {t("common.deselectAll")}
                 </button>
               </div>
 
@@ -549,7 +551,7 @@ export default function ProfilePage() {
                       <span className="font-medium">{m.title}</span>
                       <span className="text-gray-500"> at {m.client}</span>
                       <span className="text-xs text-gray-400 ml-2">
-                        {m.startDate?.slice(0, 7) ?? "?"} → {m.endDate?.slice(0, 7) ?? "Present"}
+                        {m.startDate?.slice(0, 7) ?? "?"} → {m.endDate?.slice(0, 7) ?? t("common.present")}
                       </span>
                     </div>
                   </label>
@@ -557,7 +559,7 @@ export default function ProfilePage() {
               </div>
 
               <p className="text-xs text-gray-500">
-                Selected missions will be created when you save. Rate defaults to 0 — edit them in Missions after import.
+                {t("profile.missionImportHint")}
               </p>
             </div>
           )}
@@ -566,8 +568,8 @@ export default function ProfilePage() {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Identity */}
-          <Section title="Identity">
-            <Field label="Name" required>
+          <Section title={t("profile.identity")}>
+            <Field label={t("profile.name")} required>
               <input
                 type="text"
                 value={profile.name}
@@ -576,7 +578,7 @@ export default function ProfilePage() {
                 required
               />
             </Field>
-            <Field label="Title" hint="e.g., Senior Fullstack Developer">
+            <Field label={t("profile.jobTitle")} hint={t("profile.titlePlaceholder")}>
               <input
                 type="text"
                 value={profile.title}
@@ -584,7 +586,7 @@ export default function ProfilePage() {
                 className="input"
               />
             </Field>
-            <Field label="Bio" hint="Short professional summary">
+            <Field label={t("profile.bio")} hint={t("profile.bioPlaceholder")}>
               <textarea
                 value={profile.bio}
                 onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
@@ -592,7 +594,7 @@ export default function ProfilePage() {
                 rows={4}
               />
             </Field>
-            <Field label="Years of Experience">
+            <Field label={t("profile.yearsExperience")}>
               <input
                 type="number"
                 value={profile.yearsExperience ?? ""}
@@ -606,9 +608,9 @@ export default function ProfilePage() {
           </Section>
 
           {/* Financial */}
-          <Section title="Rate Expectations">
+          <Section title={t("profile.rateExpectations")}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Minimum TJM" hint="Won't consider below">
+              <Field label={t("profile.minimumTjm")} hint={t("profile.minimumTjmHint")}>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -619,10 +621,10 @@ export default function ProfilePage() {
                     className="input w-28"
                     min={0}
                   />
-                  <span className="text-gray-500">€/day</span>
+                  <span className="text-gray-500">{t("common.perDay")}</span>
                 </div>
               </Field>
-              <Field label="Target TJM" hint="Ideal rate">
+              <Field label={t("profile.targetTjm")} hint={t("profile.targetTjmHint")}>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -633,11 +635,11 @@ export default function ProfilePage() {
                     className="input w-28"
                     min={0}
                   />
-                  <span className="text-gray-500">€/day</span>
+                  <span className="text-gray-500">{t("common.perDay")}</span>
                 </div>
               </Field>
             </div>
-            <Field label="Legal Structure">
+            <Field label={t("profile.legalStructure")}>
               <select
                 value={profile.legalStructure}
                 onChange={(e) => setProfile({ ...profile, legalStructure: e.target.value })}
@@ -649,21 +651,11 @@ export default function ProfilePage() {
                 <option value="Auto-entrepreneur">Auto-entrepreneur</option>
               </select>
             </Field>
-            <Field label="Content Language" hint="Default language for AI-generated content">
-              <select
-                value={profile.contentLanguage}
-                onChange={(e) => setProfile({ ...profile, contentLanguage: e.target.value })}
-                className="input w-40"
-              >
-                <option value="FR">Français</option>
-                <option value="EN">English</option>
-              </select>
-            </Field>
           </Section>
 
           {/* Location */}
-          <Section title="Location Preferences">
-            <Field label="Preferred Locations">
+          <Section title={t("profile.locationPreferences")}>
+            <Field label={t("profile.preferredLocations")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -676,14 +668,14 @@ export default function ProfilePage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., Remote, Paris, Lyon..."
+                  placeholder={t("profile.locationsPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("preferredLocations", locationInput, setLocationInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList
@@ -691,7 +683,7 @@ export default function ProfilePage() {
                 onRemove={(v) => removeFromArray("preferredLocations", v)}
               />
             </Field>
-            <Field label="Max Commute Days" hint="Days/week willing to go on-site">
+            <Field label={t("profile.maxCommuteDays")} hint={t("profile.maxCommuteDaysHint")}>
               <input
                 type="number"
                 value={profile.maxCommuteDays ?? ""}
@@ -706,8 +698,8 @@ export default function ProfilePage() {
           </Section>
 
           {/* Skills */}
-          <Section title="Skills">
-            <Field label="Technologies">
+          <Section title={t("profile.skills")}>
+            <Field label={t("profile.technologies")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -720,19 +712,19 @@ export default function ProfilePage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., React, Node.js, PostgreSQL..."
+                  placeholder={t("profile.technologiesPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("technologies", techInput, setTechInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList items={profile.technologies} onRemove={(v) => removeFromArray("technologies", v)} />
             </Field>
-            <Field label="Domains">
+            <Field label={t("profile.domains")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -745,19 +737,19 @@ export default function ProfilePage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., Fintech, E-commerce, SaaS..."
+                  placeholder={t("profile.domainsPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("domains", domainInput, setDomainInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList items={profile.domains} onRemove={(v) => removeFromArray("domains", v)} />
             </Field>
-            <Field label="Languages">
+            <Field label={t("profile.languages")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -770,14 +762,14 @@ export default function ProfilePage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., French, English, Spanish..."
+                  placeholder={t("profile.languagesPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("languages", langInput, setLangInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList items={profile.languages} onRemove={(v) => removeFromArray("languages", v)} />
@@ -785,8 +777,8 @@ export default function ProfilePage() {
           </Section>
 
           {/* Background */}
-          <Section title="Background">
-            <Field label="Education">
+          <Section title={t("profile.background")}>
+            <Field label={t("profile.education")}>
               {profile.education.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {profile.education.map((entry, idx) => (
@@ -818,7 +810,7 @@ export default function ProfilePage() {
                 </div>
               )}
               <p className="text-xs text-gray-500">
-                Education entries can be added via profile import above.
+                {t("profile.educationHint")}
               </p>
             </Field>
           </Section>
@@ -826,10 +818,10 @@ export default function ProfilePage() {
           {/* Actions */}
           <div className="flex gap-4 pt-4">
             <button type="submit" disabled={saving} className="btn btn-primary">
-              {saving ? "Saving..." : "Save Profile"}
+              {saving ? t("common.saving") : t("profile.saveProfile")}
             </button>
             <button type="button" onClick={() => navigate("/")} className="btn btn-secondary">
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>

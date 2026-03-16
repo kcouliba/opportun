@@ -522,11 +522,15 @@ fn fetch_lead_and_profile(
     Ok((lead, profile, missions))
 }
 
-fn resolve_content_language(profile: &Profile, lead: &Lead) -> String {
+fn resolve_content_language(lead: &Lead, app_locale: &Option<String>) -> String {
     lead.content_language
         .clone()
-        .or_else(|| profile.content_language.clone())
-        .unwrap_or_else(|| "FR".to_string())
+        .or_else(|| {
+            app_locale.as_ref().map(|l| {
+                if l.starts_with("fr") { "FR".to_string() } else { "EN".to_string() }
+            })
+        })
+        .unwrap_or_else(|| "EN".to_string())
 }
 
 fn build_user_prompt(profile: &Profile, lead: &Lead, missions: &[Mission]) -> String {
@@ -627,6 +631,7 @@ pub async fn analyze_lead_ai(
     db: tauri::State<'_, Database>,
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
+    locale: Option<String>,
 ) -> Result<LeadAnalysis, LlmError> {
     log::info!("[AI] analyze_lead_ai called for lead_id={}", lead_id);
 
@@ -634,7 +639,7 @@ pub async fn analyze_lead_ai(
     log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
     let tier = detect_tier(&llm);
-    let lang = resolve_content_language(&profile, &lead);
+    let lang = resolve_content_language(&lead, &locale);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let (system_prompt, gbnf_grammar) = if tier.is_basic() {
@@ -701,13 +706,14 @@ pub async fn generate_cover_letter_ai(
     db: tauri::State<'_, Database>,
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
+    locale: Option<String>,
 ) -> Result<Document, LlmError> {
     log::info!("[AI] generate_cover_letter_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] generate_cover_letter_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
-    let lang = resolve_content_language(&profile, &lead);
+    let lang = resolve_content_language(&lead, &locale);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let request = LlmRequest {
@@ -751,6 +757,7 @@ pub async fn generate_interview_prep_ai(
     db: tauri::State<'_, Database>,
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
+    locale: Option<String>,
 ) -> Result<Document, LlmError> {
     log::info!("[AI] generate_interview_prep_ai called for lead_id={}", lead_id);
 
@@ -758,7 +765,7 @@ pub async fn generate_interview_prep_ai(
     log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
     let tier = detect_tier(&llm);
-    let lang = resolve_content_language(&profile, &lead);
+    let lang = resolve_content_language(&lead, &locale);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     if tier.is_basic() {
@@ -951,6 +958,7 @@ pub async fn analyze_activities_ai(
     db: tauri::State<'_, Database>,
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
+    locale: Option<String>,
 ) -> Result<ActivityInsight, LlmError> {
     log::info!("[AI] analyze_activities_ai called for lead_id={}", lead_id);
 
@@ -990,7 +998,7 @@ pub async fn analyze_activities_ai(
 
     let tier = detect_tier(&llm);
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
-    let lang = resolve_content_language(&profile, &lead);
+    let lang = resolve_content_language(&lead, &locale);
     let base_prompt = build_user_prompt(&profile, &lead, &missions);
     let activities_text = llm::prompts::format_activities_for_prompt(&activities);
     let user_prompt = format!("{}\n\n## Activities\n{}", base_prompt, activities_text);
@@ -1055,13 +1063,14 @@ pub async fn generate_application_message_ai(
     llm: tauri::State<'_, LlmState>,
     lead_id: String,
     options: ApplicationMessageOptions,
+    locale: Option<String>,
 ) -> Result<Document, LlmError> {
     log::info!("[AI] generate_application_message_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
     log::info!("[AI] generate_application_message_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
 
-    let lang = resolve_content_language(&profile, &lead);
+    let lang = resolve_content_language(&lead, &locale);
     let mut user_prompt = build_user_prompt(&profile, &lead, &missions);
 
     let char_target = options.char_limit.unwrap_or(match options.length_preset.as_str() {

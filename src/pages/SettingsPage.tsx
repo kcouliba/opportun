@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
 import McpPanel from "@/components/McpPanel";
 import SyncPanel from "@/components/SyncPanel";
@@ -8,6 +10,7 @@ import { useLeadSources } from "@/hooks/useLeadSources";
 import { useToast } from "@/components/Toast";
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [sourceInput, setSourceInput] = useState("");
   const { sources: leadSources, addSource, removeSource } = useLeadSources();
@@ -22,10 +25,10 @@ export default function SettingsPage() {
       });
       if (filePath) {
         await invoke("backup_database", { destPath: filePath });
-        showToast("Backup exported successfully", "success");
+        showToast(t("settings.backupExported"), "success");
       }
     } catch (e) {
-      showToast(`Backup failed: ${e}`, "error");
+      showToast(t("settings.backupFailed", { error: e }), "error");
     }
   };
 
@@ -41,11 +44,11 @@ export default function SettingsPage() {
       await invoke("validate_database", { path: filePath });
       setRestoring(true);
       await invoke("restore_database", { sourcePath: filePath });
-      showToast("Database restored! Reloading...", "success");
+      showToast(t("settings.dbRestored"), "success");
       setTimeout(() => window.location.reload(), 1000);
     } catch (e) {
       setRestoring(false);
-      showToast(`Restore failed: ${e}`, "error");
+      showToast(t("settings.restoreFailed", { error: e }), "error");
     }
   };
 
@@ -53,16 +56,16 @@ export default function SettingsPage() {
     <main className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Settings</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("settings.title")}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            App configuration for lead sources and AI features.
+            {t("settings.subtitle")}
           </p>
         </header>
 
         <div className="space-y-8">
           {/* Lead Sources */}
-          <Section title="Lead Sources">
-            <Field label="Sources" hint="Manage the dropdown options for lead source">
+          <Section title={t("settings.leadSources")}>
+            <Field label={t("settings.sources")} hint={t("settings.sourcesHint")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -78,7 +81,7 @@ export default function SettingsPage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., malt, welcometothejungle..."
+                  placeholder={t("settings.sourcePlaceholder")}
                 />
                 <button
                   type="button"
@@ -90,20 +93,37 @@ export default function SettingsPage() {
                   }}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList items={leadSources} onRemove={removeSource} />
             </Field>
           </Section>
 
+          {/* Language */}
+          <Section title={t("settings.language")}>
+            <Field label={t("settings.language")} hint={t("settings.languageHint")}>
+              <select
+                value={i18n.language?.startsWith("fr") ? "fr" : "en"}
+                onChange={(e) => {
+                  i18n.changeLanguage(e.target.value);
+                  localStorage.setItem("opportun-locale", e.target.value);
+                }}
+                className="input w-48"
+              >
+                <option value="en">{t("settings.english")}</option>
+                <option value="fr">{t("settings.french")}</option>
+              </select>
+            </Field>
+          </Section>
+
           {/* AI Settings */}
-          <Section title="AI Settings">
+          <Section title={t("settings.aiSettings")}>
             <AiSettingsPanel />
           </Section>
 
           {/* MCP Integration */}
-          <Section title="MCP Integration">
+          <Section title={t("settings.mcpIntegration")}>
             <McpPanel />
           </Section>
 
@@ -111,22 +131,22 @@ export default function SettingsPage() {
           <SyncSection />
 
           {/* Data */}
-          <Section title="Data">
-            <Field label="Export Backup" hint="Save a full copy of your database">
+          <Section title={t("settings.data")}>
+            <Field label={t("settings.exportBackup")} hint={t("settings.exportBackupHint")}>
               <button onClick={handleExportBackup} className="btn btn-secondary">
-                Export Backup
+                {t("settings.exportBackup")}
               </button>
             </Field>
-            <Field label="Import Backup" hint="Restore from a previous backup">
+            <Field label={t("settings.importBackup")} hint={t("settings.importBackupHint")}>
               <button
                 onClick={handleImportBackup}
                 disabled={restoring}
                 className="btn btn-secondary"
               >
-                {restoring ? "Restoring..." : "Import Backup"}
+                {restoring ? t("settings.restoring") : t("settings.importBackup")}
               </button>
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                This will replace all current data and reload the app.
+                {t("settings.importWarning")}
               </p>
             </Field>
           </Section>
@@ -168,6 +188,7 @@ function Field({
 }
 
 function SyncSection() {
+  const { t } = useTranslation();
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
@@ -177,7 +198,7 @@ function SyncSection() {
   if (!available) return null;
 
   return (
-    <Section title="Sync">
+    <Section title={t("settings.sync")}>
       <SyncPanel />
     </Section>
   );

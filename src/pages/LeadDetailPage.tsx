@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import { useAiQueue } from "@/components/AiQueue";
 import { PageLoader } from "@/components/LoadingSpinner";
@@ -64,24 +65,25 @@ interface Activity {
 
 const stages = ["lead", "qualified", "negotiating", "won", "lost"];
 
-const stageLabels: Record<string, { label: string; color: string }> = {
-  lead: { label: "Lead", color: "bg-gray-100 text-gray-800" },
-  qualified: { label: "Qualified", color: "bg-blue-100 text-blue-800" },
-  negotiating: { label: "Negotiating", color: "bg-yellow-100 text-yellow-800" },
-  won: { label: "Won", color: "bg-green-100 text-green-800" },
-  lost: { label: "Lost", color: "bg-red-100 text-red-800" },
+const stageColors: Record<string, string> = {
+  lead: "bg-gray-100 text-gray-800",
+  qualified: "bg-blue-100 text-blue-800",
+  negotiating: "bg-yellow-100 text-yellow-800",
+  won: "bg-green-100 text-green-800",
+  lost: "bg-red-100 text-red-800",
 };
 
-const activityTypes: Record<string, { label: string; icon: string }> = {
-  call: { label: "Call", icon: "\ud83d\udcde" },
-  email: { label: "Email", icon: "\ud83d\udce7" },
-  meeting: { label: "Meeting", icon: "\ud83e\udd1d" },
-  interview: { label: "Interview", icon: "\ud83d\udcbc" },
-  note: { label: "Note", icon: "\ud83d\udcdd" },
-  other: { label: "Other", icon: "\ud83d\udccb" },
+const activityIcons: Record<string, string> = {
+  call: "\ud83d\udcde",
+  email: "\ud83d\udce7",
+  meeting: "\ud83e\udd1d",
+  interview: "\ud83d\udcbc",
+  note: "\ud83d\udcdd",
+  other: "\ud83d\udccb",
 };
 
 export default function LeadDetailPage() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -183,9 +185,9 @@ export default function LeadDetailPage() {
         data: { ...lead, stage: newStage },
       });
       setLead({ ...lead, stage: newStage, matchScore: updated.matchScore });
-      showToast(`Moved to ${stageLabels[newStage].label}`);
+      showToast(t("leads.movedToStage", { stage: t(`stages.${newStage}`) }));
     } catch {
-      showToast("Failed to update stage", "error");
+      showToast(t("leads.failedUpdateStage"), "error");
     }
   };
 
@@ -194,11 +196,11 @@ export default function LeadDetailPage() {
 
     // Validation
     if (!form.title.trim()) {
-      showToast("Job title is required", "error");
+      showToast(t("newLead.titleRequired"), "error");
       return;
     }
     if (!form.client.trim()) {
-      showToast("Client is required", "error");
+      showToast(t("newLead.clientRequired"), "error");
       return;
     }
 
@@ -224,19 +226,19 @@ export default function LeadDetailPage() {
         documents: lead!.documents,
       });
       setEditing(false);
-      showToast("Lead updated successfully");
+      showToast(t("leadDetail.leadUpdated"));
     } catch {
-      showToast("Failed to save changes", "error");
+      showToast(t("leadDetail.failedUpdate"), "error");
     }
     setSaving(false);
   };
 
   const docLabels: Record<string, string> = {
-    cover_letter: "Cover Letter",
-    key_questions: "Key Questions",
-    interview_prep: "Interview Prep",
-    lead_analysis: "Lead Analysis",
-    application_message: "Application Message",
+    cover_letter: t("leadDetail.coverLetter"),
+    key_questions: t("leadDetail.keyQuestions"),
+    interview_prep: t("leadDetail.interviewPrep"),
+    lead_analysis: t("leadDetail.analysis"),
+    application_message: t("leadDetail.applicationMessage"),
   };
 
   const generateDocument = async (type: string) => {
@@ -248,14 +250,14 @@ export default function LeadDetailPage() {
 
       if (type === "cover_letter" && isAiEnabled) {
         try {
-          doc = await enqueue<Document>("generate_cover_letter_ai", { leadId: id }, "Generating cover letter");
+          doc = await enqueue<Document>("generate_cover_letter_ai", { leadId: id, locale: i18n.language }, "Generating cover letter");
         } catch (aiErr) {
           console.warn("AI cover letter failed, falling back to template:", aiErr);
           // Fallback to template
           doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
         }
       } else if (type === "interview_prep") {
-        doc = await enqueue<Document>("generate_interview_prep_ai", { leadId: id }, "Generating interview prep");
+        doc = await enqueue<Document>("generate_interview_prep_ai", { leadId: id, locale: i18n.language }, "Generating interview prep");
       } else {
         doc = await invoke<Document>("generate_document", { leadId: id, docType: type });
       }
@@ -264,10 +266,10 @@ export default function LeadDetailPage() {
         setLead({ ...lead, documents: [...lead.documents, doc] });
         setActiveDoc(doc);
       }
-      showToast(`${docLabels[type] || type} generated`);
+      showToast(t("leadDetail.docGenerated", { type: docLabels[type] || type }));
     } catch (err) {
       console.error("Document generation failed:", err);
-      showToast("Failed to generate document", "error");
+      showToast(t("leadDetail.failedGenerateDoc"), "error");
     }
     setGenerating(null);
   };
@@ -289,7 +291,7 @@ export default function LeadDetailPage() {
         try {
           doc = await enqueue<Document>(
             "generate_application_message_ai",
-            { leadId: id, options },
+            { leadId: id, options, locale: i18n.language },
             "Generating application message"
           );
         } catch (aiErr) {
@@ -310,10 +312,10 @@ export default function LeadDetailPage() {
         setLead({ ...lead, documents: [...lead.documents, doc] });
         setActiveDoc(doc);
       }
-      showToast("Application message generated");
+      showToast(t("leadDetail.docGenerated", { type: docLabels["application_message"] }));
     } catch (err) {
       console.error("Application message generation failed:", err);
-      showToast("Failed to generate application message", "error");
+      showToast(t("leadDetail.failedUpdate"), "error");
     }
     setGenerating(null);
   };
@@ -322,10 +324,10 @@ export default function LeadDetailPage() {
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
-      showToast("Copied to clipboard");
+      showToast(t("common.copied"));
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      showToast("Failed to copy", "error");
+      showToast(t("common.error"), "error");
     }
   };
 
@@ -339,7 +341,7 @@ export default function LeadDetailPage() {
     });
     if (filePath) {
       await writeTextFile(filePath, doc.content);
-      showToast("Document saved to file", "success");
+      showToast(t("leadDetail.downloadDoc"), "success");
     }
   };
 
@@ -347,10 +349,10 @@ export default function LeadDetailPage() {
     if (!id) return;
     try {
       await invoke("delete_lead", { id });
-      showToast("Lead deleted");
+      showToast(t("leadDetail.leadDeleted"));
       navigate("/leads");
     } catch {
-      showToast("Failed to delete lead", "error");
+      showToast(t("leadDetail.failedDelete"), "error");
     }
   };
 
@@ -386,7 +388,7 @@ export default function LeadDetailPage() {
   const handleSaveActivity = async () => {
     if (!id) return;
     if (!activityForm.title.trim()) {
-      showToast("Title is required", "error");
+      showToast(t("newLead.titleRequired"), "error");
       return;
     }
 
@@ -413,7 +415,7 @@ export default function LeadDetailPage() {
             a.id === editingActivity.id ? updated : a
           ).sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()),
         });
-        showToast("Activity updated");
+        showToast(t("leadDetail.leadUpdated"));
         resetActivityForm();
       } else {
         // Create new activity
@@ -425,11 +427,11 @@ export default function LeadDetailPage() {
           ...lead!,
           activities: [newActivity, ...(lead!.activities ?? [])],
         });
-        showToast("Activity added");
+        showToast(t("leads.activityAdded"));
         resetActivityForm();
       }
     } catch {
-      showToast("Failed to save activity", "error");
+      showToast(t("leads.failedAddActivity"), "error");
     }
 
     setSavingActivity(false);
@@ -444,9 +446,9 @@ export default function LeadDetailPage() {
         ...lead!,
         activities: (lead!.activities ?? []).filter((a) => a.id !== activityId),
       });
-      showToast("Activity deleted");
+      showToast(t("leadDetail.activityDeleted"));
     } catch {
-      showToast("Failed to delete activity", "error");
+      showToast(t("leadDetail.failedDeleteActivity"), "error");
     }
 
     setDeletingActivityId(null);
@@ -496,7 +498,7 @@ export default function LeadDetailPage() {
         {/* Header */}
         <header className="mb-8">
           <Breadcrumbs items={[
-            { label: "Pipeline", to: "/leads" },
+            { label: t("leads.title"), to: "/leads" },
             { label: lead.client },
             { label: lead.title },
           ]} />
@@ -516,11 +518,11 @@ export default function LeadDetailPage() {
                       : "text-red-600"
                   }`}
                 >
-                  {lead.matchScore}% match
+                  {t("leads.match", { score: lead.matchScore })}
                 </div>
               )}
               {lead.autoFiltered && (
-                <p className="text-sm text-red-500">Auto-filtered</p>
+                <p className="text-sm text-red-500">{t("leadDetail.autoFiltered")}</p>
               )}
             </div>
           </div>
@@ -535,11 +537,11 @@ export default function LeadDetailPage() {
                 onClick={() => updateStage(stage)}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   lead.stage === stage
-                    ? stageLabels[stage].color
+                    ? stageColors[stage]
                     : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
                 }`}
               >
-                {stageLabels[stage].label}
+                {t(`stages.${stage}`)}
               </button>
             ))}
           </div>
@@ -548,11 +550,11 @@ export default function LeadDetailPage() {
         {editing ? (
           /* Edit Form */
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="font-semibold mb-6">Edit Lead</h2>
+            <h2 className="font-semibold mb-6">{t("common.edit")}</h2>
             <div className="space-y-6">
               {/* Basic Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Job Title">
+                <Field label={t("leadDetail.title")}>
                   <input
                     type="text"
                     value={form.title}
@@ -560,7 +562,7 @@ export default function LeadDetailPage() {
                     className="input"
                   />
                 </Field>
-                <Field label="Client">
+                <Field label={t("leadDetail.client")}>
                   <input
                     type="text"
                     value={form.client}
@@ -570,7 +572,7 @@ export default function LeadDetailPage() {
                 </Field>
               </div>
 
-              <Field label="Description">
+              <Field label={t("leadDetail.description")}>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -580,14 +582,14 @@ export default function LeadDetailPage() {
 
               {/* Source */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Source">
+                <Field label={t("leadDetail.source")}>
                   <LeadSourceSelect
                     value={form.source}
                     onChange={(v) => setForm({ ...form, source: v })}
                     className="input"
                   />
                 </Field>
-                <Field label="Source URL">
+                <Field label={t("leadDetail.sourceUrl")}>
                   <input
                     type="url"
                     value={form.sourceUrl}
@@ -599,7 +601,7 @@ export default function LeadDetailPage() {
 
               {/* Location & Rate */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Field label="Location">
+                <Field label={t("leadDetail.location")}>
                   <input
                     type="text"
                     value={form.location}
@@ -607,18 +609,18 @@ export default function LeadDetailPage() {
                     className="input"
                   />
                 </Field>
-                <Field label="Remote Policy">
+                <Field label={t("leadDetail.remotePolicy")}>
                   <select
                     value={form.remotePolicy}
                     onChange={(e) => setForm({ ...form, remotePolicy: e.target.value })}
                     className="input"
                   >
-                    <option value="remote">Full Remote</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="onsite">On-site</option>
+                    <option value="remote">{t("leadDetail.remote")}</option>
+                    <option value="hybrid">{t("leadDetail.hybrid")}</option>
+                    <option value="onsite">{t("leadDetail.onsite")}</option>
                   </select>
                 </Field>
-                <Field label="Offered Rate">
+                <Field label={t("leadDetail.offeredRate")}>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -629,14 +631,14 @@ export default function LeadDetailPage() {
                       className="input w-28"
                       min={0}
                     />
-                    <span className="text-gray-500">€/day</span>
+                    <span className="text-gray-500">{t("common.perDay")}</span>
                   </div>
                 </Field>
               </div>
 
               {/* Timeline */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Estimated Start">
+                <Field label={t("leadDetail.estimatedStart")}>
                   <input
                     type="date"
                     value={form.estimatedStartDate}
@@ -644,7 +646,7 @@ export default function LeadDetailPage() {
                     className="input"
                   />
                 </Field>
-                <Field label="Duration">
+                <Field label={t("leadDetail.estimatedDuration")}>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -655,13 +657,13 @@ export default function LeadDetailPage() {
                       className="input w-20"
                       min={1}
                     />
-                    <span className="text-gray-500">months</span>
+                    <span className="text-gray-500">{t("common.months")}</span>
                   </div>
                 </Field>
               </div>
 
               {/* Technologies */}
-              <Field label="Required Technologies">
+              <Field label={t("leadDetail.technologies")}>
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
@@ -674,14 +676,14 @@ export default function LeadDetailPage() {
                       }
                     }}
                     className="input flex-1"
-                    placeholder="Add technology..."
+                    placeholder={t("leadDetail.addTechPlaceholder")}
                   />
                   <button
                     type="button"
                     onClick={() => addToArray("requiredTechnologies", techInput, setTechInput)}
                     className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                   >
-                    Add
+                    {t("common.add")}
                   </button>
                 </div>
                 <TagList items={form.requiredTechnologies} onRemove={(v) => removeFromArray("requiredTechnologies", v)} />
@@ -689,7 +691,7 @@ export default function LeadDetailPage() {
 
               {/* Contact */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Contact Name">
+                <Field label={t("leadDetail.contactName")}>
                   <input
                     type="text"
                     value={form.contactName}
@@ -697,7 +699,7 @@ export default function LeadDetailPage() {
                     className="input"
                   />
                 </Field>
-                <Field label="Contact Info">
+                <Field label={t("leadDetail.contactInfo")}>
                   <input
                     type="text"
                     value={form.contactInfo}
@@ -708,20 +710,20 @@ export default function LeadDetailPage() {
               </div>
 
               {/* Content Language */}
-              <Field label="Content Language" hint="Override profile default for AI content">
+              <Field label={t("leadDetail.contentLanguage")}>
                 <select
                   value={form.contentLanguage}
                   onChange={(e) => setForm({ ...form, contentLanguage: e.target.value })}
                   className="input w-48"
                 >
-                  <option value="">Profile Default</option>
+                  <option value="">{t("leadDetail.profileDefault")}</option>
                   <option value="FR">Français</option>
                   <option value="EN">English</option>
                 </select>
               </Field>
 
               {/* Notes */}
-              <Field label="Notes">
+              <Field label={t("leadDetail.notes")}>
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -736,13 +738,13 @@ export default function LeadDetailPage() {
                   disabled={saving}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : "Save Changes"}
+                  {saving ? t("common.saving") : t("common.save")}
                 </button>
                 <button
                   onClick={() => setEditing(false)}
                   className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -755,54 +757,54 @@ export default function LeadDetailPage() {
               {/* Quick Info */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-semibold">Details</h2>
+                  <h2 className="font-semibold">{t("leadDetail.details")}</h2>
                   <button
                     onClick={() => setEditing(true)}
                     className="text-sm text-blue-600 hover:text-blue-700"
                   >
-                    Edit
+                    {t("common.edit")}
                   </button>
                 </div>
                 <dl className="grid grid-cols-2 gap-4 text-sm">
                   {lead.offeredRate && (
                     <div>
-                      <dt className="text-gray-500">Rate</dt>
+                      <dt className="text-gray-500">{t("leadDetail.offeredRate")}</dt>
                       <dd className="font-medium">{lead.offeredRate}€/day</dd>
                     </div>
                   )}
                   {lead.location && (
                     <div>
-                      <dt className="text-gray-500">Location</dt>
+                      <dt className="text-gray-500">{t("leadDetail.location")}</dt>
                       <dd className="font-medium">{lead.location}</dd>
                     </div>
                   )}
                   {lead.remotePolicy && (
                     <div>
-                      <dt className="text-gray-500">Remote Policy</dt>
+                      <dt className="text-gray-500">{t("leadDetail.remotePolicy")}</dt>
                       <dd className="font-medium capitalize">{lead.remotePolicy}</dd>
                     </div>
                   )}
                   {lead.estimatedDuration && (
                     <div>
-                      <dt className="text-gray-500">Duration</dt>
-                      <dd className="font-medium">{lead.estimatedDuration} months</dd>
+                      <dt className="text-gray-500">{t("leadDetail.estimatedDuration")}</dt>
+                      <dd className="font-medium">{lead.estimatedDuration} {t("common.months")}</dd>
                     </div>
                   )}
                   {lead.estimatedStartDate && (
                     <div>
-                      <dt className="text-gray-500">Start Date</dt>
+                      <dt className="text-gray-500">{t("leadDetail.estimatedStart")}</dt>
                       <dd className="font-medium">
                         {new Date(lead.estimatedStartDate).toLocaleDateString()}
                       </dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-gray-500">Source</dt>
+                    <dt className="text-gray-500">{t("leadDetail.source")}</dt>
                     <dd className="font-medium capitalize">{lead.source}</dd>
                   </div>
                   {lead.contentLanguage && (
                     <div>
-                      <dt className="text-gray-500">Content Language</dt>
+                      <dt className="text-gray-500">{t("leadDetail.contentLanguage")}</dt>
                       <dd className="font-medium">{lead.contentLanguage === "FR" ? "Français" : "English"}</dd>
                     </div>
                   )}
@@ -812,7 +814,7 @@ export default function LeadDetailPage() {
               {/* Technologies */}
               {requiredTechs.length > 0 && (
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h2 className="font-semibold mb-4">Required Technologies</h2>
+                  <h2 className="font-semibold mb-4">{t("leadDetail.technologies")}</h2>
                   <div className="flex flex-wrap gap-2">
                     {requiredTechs.map((tech: string) => (
                       <span
@@ -829,7 +831,7 @@ export default function LeadDetailPage() {
               {/* Description */}
               {lead.description && (
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h2 className="font-semibold mb-4">Description</h2>
+                  <h2 className="font-semibold mb-4">{t("leadDetail.description")}</h2>
                   <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                     {lead.description}
                   </p>
@@ -839,7 +841,7 @@ export default function LeadDetailPage() {
               {/* Notes */}
               {lead.notes && (
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h2 className="font-semibold mb-4">Notes</h2>
+                  <h2 className="font-semibold mb-4">{t("leadDetail.notes")}</h2>
                   <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                     {lead.notes}
                   </p>
@@ -849,12 +851,12 @@ export default function LeadDetailPage() {
               {/* Activities */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-semibold">Activities</h2>
+                  <h2 className="font-semibold">{t("leadDetail.activities")}</h2>
                   <button
                     onClick={openAddActivity}
                     className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
-                    + Add
+                    + {t("common.add")}
                   </button>
                 </div>
 
@@ -870,13 +872,13 @@ export default function LeadDetailPage() {
                 {showActivityForm && (
                   <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <h3 className="font-medium mb-3">
-                      {editingActivity ? "Edit Activity" : "New Activity"}
+                      {editingActivity ? t("leadDetail.editActivity") : t("leadDetail.addActivity")}
                     </h3>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                            Type
+                            {t("leadDetail.type")}
                           </label>
                           <select
                             value={activityForm.type}
@@ -885,16 +887,16 @@ export default function LeadDetailPage() {
                             }
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
                           >
-                            {Object.entries(activityTypes).map(([value, { label, icon }]) => (
+                            {Object.entries(activityIcons).map(([value, icon]) => (
                               <option key={value} value={value}>
-                                {icon} {label}
+                                {icon} {t(`activityTypes.${value}`)}
                               </option>
                             ))}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                            Date & Time
+                            {t("leadDetail.occurredAt")}
                           </label>
                           <input
                             type="datetime-local"
@@ -908,7 +910,7 @@ export default function LeadDetailPage() {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          Title
+                          {t("leadDetail.title")}
                         </label>
                         <input
                           type="text"
@@ -916,20 +918,20 @@ export default function LeadDetailPage() {
                           onChange={(e) =>
                             setActivityForm({ ...activityForm, title: e.target.value })
                           }
-                          placeholder="Brief description..."
+                          placeholder={t("leadDetail.briefDescription")}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
                         />
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          Description (optional)
+                          {t("leadDetail.description")}
                         </label>
                         <textarea
                           value={activityForm.description}
                           onChange={(e) =>
                             setActivityForm({ ...activityForm, description: e.target.value })
                           }
-                          placeholder="Detailed notes..."
+                          placeholder={t("leadDetail.detailedNotes")}
                           rows={2}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
                         />
@@ -937,7 +939,7 @@ export default function LeadDetailPage() {
                       {(activityForm.type === "call" || activityForm.type === "meeting" || activityForm.type === "interview") && (
                         <div>
                           <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                            Duration (minutes)
+                            {t("leadDetail.duration")}
                           </label>
                           <input
                             type="number"
@@ -960,13 +962,13 @@ export default function LeadDetailPage() {
                           disabled={savingActivity}
                           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                         >
-                          {savingActivity ? "Saving..." : editingActivity ? "Update" : "Add"}
+                          {savingActivity ? t("common.saving") : editingActivity ? t("leadDetail.saveActivity") : t("common.add")}
                         </button>
                         <button
                           onClick={resetActivityForm}
                           className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                         >
-                          Cancel
+                          {t("common.cancel")}
                         </button>
                       </div>
                     </div>
@@ -975,7 +977,7 @@ export default function LeadDetailPage() {
 
                 {/* Activity List */}
                 {(lead.activities?.length ?? 0) === 0 && !showActivityForm ? (
-                  <p className="text-gray-500 text-sm">No activities recorded yet.</p>
+                  <p className="text-gray-500 text-sm">{t("leadDetail.noActivities")}</p>
                 ) : (
                   <div className="space-y-3">
                     {(lead.activities ?? []).map((activity) => (
@@ -986,7 +988,7 @@ export default function LeadDetailPage() {
                         <div className="flex justify-between items-start">
                           <div className="flex gap-2">
                             <span className="text-lg">
-                              {activityTypes[activity.type]?.icon || "\ud83d\udccb"}
+                              {activityIcons[activity.type] || "\ud83d\udccb"}
                             </span>
                             <div>
                               <p className="font-medium">{activity.title}</p>
@@ -1006,7 +1008,7 @@ export default function LeadDetailPage() {
                               onClick={() => openEditActivity(activity)}
                               className="text-sm text-blue-600 hover:text-blue-700"
                             >
-                              Edit
+                              {t("common.edit")}
                             </button>
                             <button
                               onClick={() => handleDeleteActivity(activity.id)}
@@ -1035,13 +1037,13 @@ export default function LeadDetailPage() {
                         onClick={() => handleSaveDocument(activeDoc)}
                         className="text-sm text-green-600 hover:text-green-700"
                       >
-                        Save to File
+                        {t("leadDetail.downloadDoc")}
                       </button>
                       <button
                         onClick={() => copyToClipboard(activeDoc.content)}
                         className="text-sm text-blue-600 hover:text-blue-700"
                       >
-                        {copied ? "Copied!" : "Copy to clipboard"}
+                        {copied ? t("common.copied") : t("common.copyToClipboard")}
                       </button>
                     </div>
                   </div>
@@ -1058,7 +1060,7 @@ export default function LeadDetailPage() {
             <div className="space-y-6">
               {/* Generate Documents */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Generate Documents</h2>
+                <h2 className="font-semibold mb-4">{t("leadDetail.generateDoc")}</h2>
                 <div className="space-y-3">
                   <button
                     onClick={() => generateDocument("cover_letter")}
@@ -1066,10 +1068,10 @@ export default function LeadDetailPage() {
                     className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
                     {generating === "cover_letter"
-                      ? "Generating..."
+                      ? t("leadDetail.generating")
                       : isAiEnabled
-                      ? "Cover Letter (AI)"
-                      : "Cover Letter"}
+                      ? `${t("leadDetail.coverLetter")} (AI)`
+                      : t("leadDetail.coverLetter")}
                   </button>
                   <button
                     onClick={() => generateDocument("key_questions")}
@@ -1077,7 +1079,7 @@ export default function LeadDetailPage() {
                     className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
                   >
                     {generating === "key_questions"
-                      ? "Generating..."
+                      ? t("leadDetail.generating")
                       : "Key Questions"}
                   </button>
                   {isAiEnabled && (
@@ -1087,8 +1089,8 @@ export default function LeadDetailPage() {
                       className="w-full py-2 px-4 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
                     >
                       {generating === "interview_prep"
-                        ? "Generating..."
-                        : "Interview Prep"}
+                        ? t("leadDetail.generating")
+                        : t("leadDetail.interviewPrep")}
                     </button>
                   )}
 
@@ -1100,50 +1102,50 @@ export default function LeadDetailPage() {
                       disabled={generating !== null}
                     >
                       {generating === "application_message"
-                        ? "Generating..."
+                        ? t("leadDetail.generating")
                         : isAiEnabled
-                        ? "Application Message (AI)"
-                        : "Application Message"}
+                        ? `${t("leadDetail.applicationMessage")} (AI)`
+                        : t("leadDetail.applicationMessage")}
                       <span className="text-xs">{showMsgOptions ? "\u25B2" : "\u25BC"}</span>
                     </button>
                     {showMsgOptions && (
                       <div className="mt-3 space-y-3 text-sm">
                         <div>
-                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Length</label>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">{t("leadDetail.lengthPreset")}</label>
                           <select
                             value={msgLengthPreset}
                             onChange={(e) => setMsgLengthPreset(e.target.value as "short" | "standard" | "long")}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
                           >
-                            <option value="short">Short (~150 chars)</option>
-                            <option value="standard">Standard (~500 chars)</option>
-                            <option value="long">Long (~1000 chars)</option>
+                            <option value="short">{t("leadDetail.short")} (~150 chars)</option>
+                            <option value="standard">{t("leadDetail.standard")} (~500 chars)</option>
+                            <option value="long">{t("leadDetail.long")} (~1000 chars)</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Char limit (optional)</label>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">{t("leadDetail.lengthPreset")} (optional)</label>
                           <input
                             type="number"
                             value={msgCharLimit}
                             onChange={(e) => setMsgCharLimit(e.target.value)}
-                            placeholder="Override preset"
+                            placeholder={t("leadDetail.overridePreset")}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
                           />
                         </div>
                         <div>
-                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Tone</label>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">{t("leadDetail.tone")}</label>
                           <select
                             value={msgTone}
                             onChange={(e) => setMsgTone(e.target.value as "professional" | "friendly" | "direct")}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm"
                           >
-                            <option value="professional">Professional</option>
-                            <option value="friendly">Friendly</option>
-                            <option value="direct">Direct</option>
+                            <option value="professional">{t("leadDetail.professional")}</option>
+                            <option value="friendly">{t("leadDetail.friendly")}</option>
+                            <option value="direct">{t("leadDetail.direct")}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-gray-600 dark:text-gray-400 mb-1">Custom focus (optional)</label>
+                          <label className="block text-gray-600 dark:text-gray-400 mb-1">{t("leadDetail.customFocus")}</label>
                           <input
                             type="text"
                             value={msgCustomFocus}
@@ -1157,7 +1159,7 @@ export default function LeadDetailPage() {
                           disabled={generating !== null}
                           className="w-full py-2 px-4 bg-orange-700 text-white rounded-md hover:bg-orange-800 disabled:opacity-50 transition-colors text-sm font-medium"
                         >
-                          {generating === "application_message" ? "Generating..." : "Generate"}
+                          {generating === "application_message" ? t("leadDetail.generating") : t("leadDetail.generate")}
                         </button>
                       </div>
                     )}
@@ -1173,7 +1175,7 @@ export default function LeadDetailPage() {
               {/* Contact */}
               {(lead.contactName || lead.contactInfo) && (
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h2 className="font-semibold mb-4">Contact</h2>
+                  <h2 className="font-semibold mb-4">{t("leadDetail.contact")}</h2>
                   {lead.contactName && (
                     <p className="font-medium">{lead.contactName}</p>
                   )}
@@ -1188,7 +1190,7 @@ export default function LeadDetailPage() {
               {/* Previous Documents */}
               {lead.documents.length > 0 && (
                 <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h2 className="font-semibold mb-4">Generated Documents</h2>
+                  <h2 className="font-semibold mb-4">{t("leadDetail.documents")}</h2>
                   <ul className="space-y-2">
                     {lead.documents.map((doc) => (
                       <li key={doc.id}>
@@ -1213,13 +1215,13 @@ export default function LeadDetailPage() {
 
               {/* Actions */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="font-semibold mb-4">Actions</h2>
+                <h2 className="font-semibold mb-4">{t("common.edit")}</h2>
                 <div className="space-y-3">
                   <button
                     onClick={() => setEditing(true)}
                     className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   >
-                    Edit Lead
+                    {t("common.edit")}
                   </button>
                   {lead.sourceUrl && (
                     <a
@@ -1228,7 +1230,7 @@ export default function LeadDetailPage() {
                       rel="noopener noreferrer"
                       className="block w-full py-2 px-4 text-center bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                     >
-                      View Original Posting
+                      {t("leadDetail.sourceUrl")}
                     </a>
                   )}
                   {confirmDelete ? (
@@ -1237,13 +1239,13 @@ export default function LeadDetailPage() {
                         onClick={deleteLead}
                         className="flex-1 py-2 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
                       >
-                        Confirm
+                        {t("common.confirm")}
                       </button>
                       <button
                         onClick={() => setConfirmDelete(false)}
                         className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                     </div>
                   ) : (
@@ -1251,7 +1253,7 @@ export default function LeadDetailPage() {
                       onClick={() => setConfirmDelete(true)}
                       className="w-full py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                     >
-                      Delete Lead
+                      {t("leadDetail.deleteLead")}
                     </button>
                   )}
                 </div>

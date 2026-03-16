@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 
 interface MissionForm {
@@ -24,6 +25,7 @@ const defaultMission: MissionForm = {
 };
 
 export default function NewMissionPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [mission, setMission] = useState<MissionForm>(defaultMission);
@@ -33,19 +35,19 @@ export default function NewMissionPage() {
     e.preventDefault();
 
     if (!mission.title.trim()) {
-      showToast("Title is required", "error");
+      showToast(t("newMission.titleRequired"), "error");
       return;
     }
     if (!mission.client.trim()) {
-      showToast("Client is required", "error");
+      showToast(t("newMission.clientRequired"), "error");
       return;
     }
     if (!mission.startDate) {
-      showToast("Start date is required", "error");
+      showToast(t("newMission.startDateRequired"), "error");
       return;
     }
     if (!mission.rate) {
-      showToast("Daily rate is required", "error");
+      showToast(t("newMission.rateRequired"), "error");
       return;
     }
 
@@ -60,10 +62,10 @@ export default function NewMissionPage() {
         },
       });
 
-      showToast("Mission added successfully", "success");
+      showToast(t("newMission.missionAdded"), "success");
       navigate("/missions");
     } catch {
-      showToast("Failed to create mission. Make sure you have a profile set up first.", "error");
+      showToast(t("newMission.failedCreate"), "error");
       setSaving(false);
     }
   };
@@ -72,49 +74,49 @@ export default function NewMissionPage() {
     <main className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Add Mission</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("newMission.title")}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Track your current or upcoming work
+            {t("newMission.subtitle")}
           </p>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basic Info */}
-          <Section title="Mission Details">
-            <Field label="Title" required>
+          <Section title={t("missions.missionDetails")}>
+            <Field label={t("missions.missionTitle")} required>
               <input
                 type="text"
                 value={mission.title}
                 onChange={(e) => setMission({ ...mission, title: e.target.value })}
                 className="input"
-                placeholder="e.g., Platform Migration"
+                placeholder={t("newMission.titlePlaceholder")}
                 required
               />
             </Field>
-            <Field label="Client" required>
+            <Field label={t("missions.client")} required>
               <input
                 type="text"
                 value={mission.client}
                 onChange={(e) => setMission({ ...mission, client: e.target.value })}
                 className="input"
-                placeholder="e.g., Acme Corp"
+                placeholder={t("newMission.clientPlaceholder")}
                 required
               />
             </Field>
-            <Field label="Description">
+            <Field label={t("missions.description")}>
               <textarea
                 value={mission.description}
                 onChange={(e) => setMission({ ...mission, description: e.target.value })}
                 className="input min-h-[80px]"
-                placeholder="Brief description of the work..."
+                placeholder={t("newMission.descriptionPlaceholder")}
               />
             </Field>
           </Section>
 
           {/* Timeline */}
-          <Section title="Timeline">
+          <Section title={t("missions.timeline")}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Start Date" required>
+              <Field label={t("missions.startDate")} required>
                 <input
                   type="date"
                   value={mission.startDate}
@@ -123,7 +125,7 @@ export default function NewMissionPage() {
                   required
                 />
               </Field>
-              <Field label="End Date" hint="Leave empty if ongoing">
+              <Field label={t("missions.endDate")} hint={t("missions.endDateHint")}>
                 <input
                   type="date"
                   value={mission.endDate}
@@ -135,9 +137,9 @@ export default function NewMissionPage() {
           </Section>
 
           {/* Financial */}
-          <Section title="Financial">
+          <Section title={t("missions.financial")}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Daily Rate" required>
+              <Field label={t("missions.dailyRate")} required>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -149,10 +151,10 @@ export default function NewMissionPage() {
                     min={0}
                     required
                   />
-                  <span className="text-gray-500">€/day</span>
+                  <span className="text-gray-500">{t("common.perDay")}</span>
                 </div>
               </Field>
-              <Field label="Days per Week">
+              <Field label={t("missions.daysPerWeek")}>
                 <select
                   value={mission.daysPerWeek}
                   onChange={(e) =>
@@ -173,16 +175,12 @@ export default function NewMissionPage() {
             {mission.rate && mission.startDate && mission.endDate && (
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  Estimated revenue:{" "}
-                  <strong>
-                    {calculateRevenue(
-                      mission.rate,
-                      mission.daysPerWeek,
-                      mission.startDate,
-                      mission.endDate
-                    ).toLocaleString()}
-                    €
-                  </strong>
+                  {t("missions.estimatedRevenue", { amount: calculateRevenue(
+                    mission.rate,
+                    mission.daysPerWeek,
+                    mission.startDate,
+                    mission.endDate
+                  ).toLocaleString() })}
                 </p>
               </div>
             )}
@@ -191,14 +189,14 @@ export default function NewMissionPage() {
           {/* Actions */}
           <div className="flex gap-4 pt-4">
             <button type="submit" disabled={saving} className="btn btn-primary">
-              {saving ? "Saving..." : "Add Mission"}
+              {saving ? t("common.saving") : t("newMission.title")}
             </button>
             <button
               type="button"
               onClick={() => navigate("/missions")}
               className="btn btn-secondary"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import { useAiParse } from "@/hooks/useAiParse";
@@ -47,6 +48,7 @@ type ParseSource = "auto" | "ai";
 
 export default function QuickCapturePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { isAiEnabled } = useAiSettings();
   const { parseWithAi, parsing: aiParsing } = useAiParse();
@@ -155,15 +157,15 @@ export default function QuickCapturePage() {
         const count = applyParsedResult(parsed, "auto");
         if (count > 0) {
           showToast(
-            `Extracted ${count} field${count > 1 ? "s" : ""} from description`,
+            t("quickCapture.extractedCount", { count }),
             "success",
           );
         } else {
-          showToast("No fields could be extracted", "info");
+          showToast(t("quickCapture.noFieldsExtracted"), "info");
         }
       }
     },
-    [parseText, applyParsedResult, showToast],
+    [parseText, applyParsedResult, showToast, t],
   );
 
   // Handle text arriving from any source
@@ -178,13 +180,13 @@ export default function QuickCapturePage() {
   // URL import
   const handleUrlImport = async () => {
     if (!urlInput.trim()) {
-      showToast("Enter a URL first", "error");
+      showToast(t("quickCapture.enterUrl"), "error");
       return;
     }
     const text = await fetchUrl(urlInput.trim());
     if (text) {
       await handleTextImported(text);
-      showToast("Text imported from URL", "success");
+      showToast(t("quickCapture.textImportedUrl"), "success");
     }
   };
 
@@ -193,7 +195,7 @@ export default function QuickCapturePage() {
     const text = await readFile();
     if (text) {
       await handleTextImported(text);
-      showToast("Text imported from file", "success");
+      showToast(t("quickCapture.textImportedFile"), "success");
     }
   };
 
@@ -203,14 +205,14 @@ export default function QuickCapturePage() {
     if (text) {
       setInputMode("file");
       await handleTextImported(text);
-      showToast("Text imported from file", "success");
+      showToast(t("quickCapture.textImportedFile"), "success");
     }
   };
 
   // Import from pasted file path (Windows or WSL)
   const handlePathImport = async () => {
     if (!pathInput.trim()) {
-      showToast("Paste a file path first", "error");
+      showToast(t("quickCapture.pasteFilePathFirst"), "error");
       return;
     }
     const wslPath = toWslPath(pathInput);
@@ -223,7 +225,7 @@ export default function QuickCapturePage() {
     if (text) {
       setPathInput("");
       await handleTextImported(text);
-      showToast("Text imported from file", "success");
+      showToast(t("quickCapture.textImportedFile"), "success");
     }
   };
 
@@ -241,16 +243,16 @@ export default function QuickCapturePage() {
       readFile().then((text) => {
         if (text) {
           handleTextImported(text);
-          showToast("Text imported from file", "success");
+          showToast(t("quickCapture.textImportedFile"), "success");
         }
       });
     }
-  }, [searchParams, readFile, handleTextImported, showToast]);
+  }, [searchParams, readFile, handleTextImported, showToast, t]);
 
   // Manual parse button (for paste mode)
   const handleParse = async () => {
     if (!jobDescription.trim()) {
-      showToast("Paste a job description first", "error");
+      showToast(t("quickCapture.pasteFirst"), "error");
       return;
     }
     await autoParseText(jobDescription);
@@ -259,13 +261,13 @@ export default function QuickCapturePage() {
   // Enhance with AI: overwrites auto-parsed fields, fills gaps, preserves nothing from rule parser
   const handleEnhanceWithAi = async () => {
     if (!jobDescription.trim()) {
-      showToast("No text to enhance", "error");
+      showToast(t("quickCapture.noTextToEnhance"), "error");
       return;
     }
 
     const aiResult = await parseWithAi(jobDescription);
     if (!aiResult) {
-      showToast("AI enhancement failed", "error");
+      showToast(t("quickCapture.aiEnhanceFailed"), "error");
       return;
     }
 
@@ -331,11 +333,11 @@ export default function QuickCapturePage() {
       setAutoFilled(newAutoFilled);
       setParseSource("ai");
       showToast(
-        `AI extracted ${count} field${count > 1 ? "s" : ""}`,
+        t("quickCapture.aiExtractedCount", { count }),
         "success",
       );
     } else {
-      showToast("AI could not extract any fields", "info");
+      showToast(t("quickCapture.aiNoFields"), "info");
     }
   };
 
@@ -343,7 +345,7 @@ export default function QuickCapturePage() {
     e.preventDefault();
 
     if (!form.client.trim()) {
-      showToast("Client/Company is required", "error");
+      showToast(t("quickCapture.clientRequired"), "error");
       return;
     }
 
@@ -369,7 +371,7 @@ export default function QuickCapturePage() {
 
     try {
       await invoke("create_lead", { data: payload });
-      showToast("Lead captured!", "success");
+      showToast(t("quickCapture.leadCaptured"), "success");
       setForm({
         client: "",
         title: "",
@@ -391,7 +393,7 @@ export default function QuickCapturePage() {
       setAutoFilled({ ...EMPTY_AUTOFILLED });
       setParseSource(null);
     } catch {
-      showToast("An error occurred", "error");
+      showToast(t("common.error"), "error");
     }
 
     setSaving(false);
@@ -399,7 +401,7 @@ export default function QuickCapturePage() {
 
   const handleSubmitAndView = async () => {
     if (!form.client.trim()) {
-      showToast("Client/Company is required", "error");
+      showToast(t("quickCapture.clientRequired"), "error");
       return;
     }
 
@@ -427,10 +429,10 @@ export default function QuickCapturePage() {
       const lead = await invoke<{ id: string }>("create_lead", {
         data: payload,
       });
-      showToast("Lead captured!", "success");
+      showToast(t("quickCapture.leadCaptured"), "success");
       navigate(`/leads/${lead.id}`);
     } catch {
-      showToast("An error occurred", "error");
+      showToast(t("common.error"), "error");
       setSaving(false);
     }
   };
@@ -451,12 +453,12 @@ export default function QuickCapturePage() {
         {/* Header */}
         <header className="mb-6">
           <Breadcrumbs items={[
-            { label: "Pipeline", to: "/leads" },
-            { label: "Quick Capture" },
+            { label: t("leads.title"), to: "/leads" },
+            { label: t("quickCapture.title") },
           ]} />
-          <h1 className="text-xl font-bold">Quick Capture</h1>
+          <h1 className="text-xl font-bold">{t("quickCapture.title")}</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Capture now, details later
+            {t("quickCapture.subtitle")}
           </p>
         </header>
 
@@ -465,7 +467,7 @@ export default function QuickCapturePage() {
           onFileDrop={handleFileDrop}
           onError={(msg) => showToast(msg, "error")}
           enabled={!isLoading}
-          label="Drop job description file here"
+          label={t("quickCapture.dropFile")}
         >
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
           {/* Input mode tabs */}
@@ -481,9 +483,9 @@ export default function QuickCapturePage() {
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                 }`}
               >
-                {mode === "paste" && "Paste"}
-                {mode === "url" && "URL"}
-                {mode === "file" && "File"}
+                {mode === "paste" && t("quickCapture.paste")}
+                {mode === "url" && t("quickCapture.url")}
+                {mode === "file" && t("quickCapture.file")}
               </button>
             ))}
           </div>
@@ -495,7 +497,7 @@ export default function QuickCapturePage() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] text-sm"
-                placeholder="Paste the job description here to auto-extract technologies, rate, location..."
+                placeholder={t("quickCapture.pastePlaceholder")}
                 rows={4}
               />
               <div className="flex gap-2 mt-2">
@@ -505,7 +507,7 @@ export default function QuickCapturePage() {
                   disabled={isLoading}
                   className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
                 >
-                  {isLoading ? "Parsing..." : "Parse Description"}
+                  {isLoading ? t("common.loading") : t("quickCapture.parseDescription")}
                 </button>
                 {isAiEnabled && parseSource === "auto" && (
                   <button
@@ -514,7 +516,7 @@ export default function QuickCapturePage() {
                     disabled={aiParsing}
                     className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
                   >
-                    {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                    {aiParsing ? t("quickCapture.enhancing") : t("quickCapture.enhanceWithAi")}
                   </button>
                 )}
               </div>
@@ -530,7 +532,7 @@ export default function QuickCapturePage() {
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="https://example.com/job-posting"
+                  placeholder={t("quickCapture.urlPlaceholder")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -544,13 +546,13 @@ export default function QuickCapturePage() {
                   disabled={isLoading}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  {importLoading ? "Importing..." : "Import"}
+                  {importLoading ? t("quickCapture.importing") : t("common.import")}
                 </button>
               </div>
               {jobDescription && (
                 <div className="mt-3">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Imported text (editable)
+                    {t("quickCapture.importedText")}
                   </label>
                   <textarea
                     value={jobDescription}
@@ -565,7 +567,7 @@ export default function QuickCapturePage() {
                       disabled={isLoading}
                       className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
                     >
-                      Re-parse
+                      {t("quickCapture.reparse")}
                     </button>
                     {isAiEnabled && parseSource === "auto" && (
                       <button
@@ -574,7 +576,7 @@ export default function QuickCapturePage() {
                         disabled={aiParsing}
                         className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
                       >
-                        {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                        {aiParsing ? t("quickCapture.enhancing") : t("quickCapture.enhanceWithAi")}
                       </button>
                     )}
                   </div>
@@ -593,8 +595,8 @@ export default function QuickCapturePage() {
                 className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 disabled:opacity-50 transition-colors text-sm font-medium"
               >
                 {importLoading
-                  ? "Reading file..."
-                  : "Choose File (PDF, TXT, MD)"}
+                  ? t("quickCapture.readingFile")
+                  : t("quickCapture.chooseFile")}
               </button>
               <div className="flex gap-2 mt-2">
                 <input
@@ -602,7 +604,7 @@ export default function QuickCapturePage() {
                   value={pathInput}
                   onChange={(e) => setPathInput(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="Or paste file path from Explorer"
+                  placeholder={t("quickCapture.pasteFilePath")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -616,13 +618,13 @@ export default function QuickCapturePage() {
                   disabled={isLoading || !pathInput.trim()}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  Import
+                  {t("common.import")}
                 </button>
               </div>
               {jobDescription && (
                 <div className="mt-3">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Extracted text (editable)
+                    {t("quickCapture.extractedText")}
                   </label>
                   <textarea
                     value={jobDescription}
@@ -637,7 +639,7 @@ export default function QuickCapturePage() {
                       disabled={isLoading}
                       className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
                     >
-                      Re-parse
+                      {t("quickCapture.reparse")}
                     </button>
                     {isAiEnabled && parseSource === "auto" && (
                       <button
@@ -646,7 +648,7 @@ export default function QuickCapturePage() {
                         disabled={aiParsing}
                         className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-50 transition-colors"
                       >
-                        {aiParsing ? "Enhancing..." : "Enhance with AI"}
+                        {aiParsing ? t("quickCapture.enhancing") : t("quickCapture.enhanceWithAi")}
                       </button>
                     )}
                   </div>
@@ -661,7 +663,7 @@ export default function QuickCapturePage() {
           {/* Client - Most important */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Client / Company <span className="text-red-500">*</span>
+              {t("quickCapture.client")} <span className="text-red-500">*</span>
               {autoFilled.client && (
                 <span
                   className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -675,7 +677,7 @@ export default function QuickCapturePage() {
               value={form.client}
               onChange={(e) => setForm({ ...form, client: e.target.value })}
               className="w-full px-4 py-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Who is it?"
+              placeholder={t("quickCapture.clientPlaceholder")}
               autoFocus
             />
           </div>
@@ -684,7 +686,7 @@ export default function QuickCapturePage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Contact Name
+                {t("quickCapture.contactName")}
                 {autoFilled.contactName && (
                   <span
                     className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -700,12 +702,12 @@ export default function QuickCapturePage() {
                   setForm({ ...form, contactName: e.target.value })
                 }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Recruiter name"
+                placeholder={t("quickCapture.contactNamePlaceholder")}
               />
             </div>
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Contact Info
+                {t("quickCapture.contactInfo")}
                 {autoFilled.contactInfo && (
                   <span
                     className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -721,7 +723,7 @@ export default function QuickCapturePage() {
                   setForm({ ...form, contactInfo: e.target.value })
                 }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Email or phone"
+                placeholder={t("quickCapture.contactInfoPlaceholder")}
               />
             </div>
           </div>
@@ -730,7 +732,7 @@ export default function QuickCapturePage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Source
+                {t("quickCapture.source")}
               </label>
               <LeadSourceSelect
                 value={form.source}
@@ -740,7 +742,7 @@ export default function QuickCapturePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Follow up
+                {t("quickCapture.followUp")}
               </label>
               <input
                 type="date"
@@ -760,14 +762,14 @@ export default function QuickCapturePage() {
             form.remotePolicy) && (
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
               <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                Extracted from description (review and edit)
+                {t("quickCapture.extractedFields")}
               </p>
 
               {/* Technologies */}
               {form.technologies.length > 0 && (
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Technologies
+                    {t("quickCapture.technologies")}
                     {autoFilled.technologies && (
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -808,7 +810,7 @@ export default function QuickCapturePage() {
                 {form.rate !== null && (
                   <div>
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Rate (€/day)
+                      {t("quickCapture.rate")}
                       {autoFilled.rate && (
                         <span
                           className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -829,12 +831,12 @@ export default function QuickCapturePage() {
                         })
                       }
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 600"
+                      placeholder={t("quickCapture.ratePlaceholder")}
                     />
                     {form.rateDisplay &&
                       form.rateDisplay !== `${form.rate}€/day` && (
                         <p className="text-[10px] text-gray-500 mt-0.5">
-                          Parsed: {form.rateDisplay}
+                          {t("quickCapture.parsed", { display: form.rateDisplay })}
                         </p>
                       )}
                   </div>
@@ -842,7 +844,7 @@ export default function QuickCapturePage() {
                 {form.location && (
                   <div>
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Location
+                      {t("quickCapture.location")}
                       {autoFilled.location && (
                         <span
                           className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -864,7 +866,7 @@ export default function QuickCapturePage() {
                 {form.remotePolicy && (
                   <div>
                     <label className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Remote
+                      {t("quickCapture.remote")}
                       {autoFilled.remotePolicy && (
                         <span
                           className={`text-[10px] px-1 py-0.5 rounded ${badgeClass(parseSource)}`}
@@ -880,10 +882,10 @@ export default function QuickCapturePage() {
                       }
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="full-remote">Full Remote</option>
-                      <option value="remote">Remote</option>
-                      <option value="hybrid">Hybrid</option>
-                      <option value="on-site">On-site</option>
+                      <option value="full-remote">{t("quickCapture.fullRemote")}</option>
+                      <option value="remote">{t("quickCapture.remote")}</option>
+                      <option value="hybrid">{t("quickCapture.hybrid")}</option>
+                      <option value="on-site">{t("quickCapture.onsite")}</option>
                     </select>
                   </div>
                 )}
@@ -894,13 +896,13 @@ export default function QuickCapturePage() {
           {/* Quick notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Quick notes
+              {t("quickCapture.quickNotes")}
             </label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[60px]"
-              placeholder="Key points from the call..."
+              placeholder={t("quickCapture.notesPlaceholder")}
               rows={2}
             />
           </div>
@@ -912,7 +914,7 @@ export default function QuickCapturePage() {
               disabled={saving}
               className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {saving ? "Saving..." : "Save & Add Another"}
+              {saving ? t("common.saving") : t("quickCapture.saveAndAdd")}
             </button>
             <button
               type="button"
@@ -920,15 +922,14 @@ export default function QuickCapturePage() {
               disabled={saving}
               className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
             >
-              Save & View Details
+              {t("quickCapture.saveAndView")}
             </button>
           </div>
         </form>
 
         {/* Tip */}
         <p className="mt-6 text-xs text-center text-gray-500">
-          Tip: Import from URL or file, or paste — the parser extracts details
-          instantly
+          {t("quickCapture.tip")}
         </p>
       </div>
     </main>

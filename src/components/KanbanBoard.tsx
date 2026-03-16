@@ -1,5 +1,6 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 interface KanbanLead {
   id: string;
@@ -15,15 +16,17 @@ interface KanbanBoardProps {
   onStageChange: (leadId: string, newStage: string) => void;
 }
 
-const columns = [
-  { id: "lead", label: "Lead", color: "bg-gray-500" },
-  { id: "qualified", label: "Qualified", color: "bg-blue-500" },
-  { id: "negotiating", label: "Negotiating", color: "bg-yellow-500" },
-  { id: "won", label: "Won", color: "bg-green-500" },
-  { id: "lost", label: "Lost", color: "bg-red-500" },
+const columnDefs = [
+  { id: "lead", color: "bg-gray-500" },
+  { id: "qualified", color: "bg-blue-500" },
+  { id: "negotiating", color: "bg-yellow-500" },
+  { id: "won", color: "bg-green-500" },
+  { id: "lost", color: "bg-red-500" },
 ] as const;
 
 export default function KanbanBoard({ leads, onStageChange }: KanbanBoardProps) {
+  const { t } = useTranslation();
+  const columns = columnDefs.map((col) => ({ ...col, label: t(`stages.${col.id}`) }));
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
     const newStage = result.destination.droppableId;

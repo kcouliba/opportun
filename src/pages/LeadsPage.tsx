@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { useTranslation } from "react-i18next";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { useToast } from "@/components/Toast";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -36,15 +37,16 @@ interface Lead {
   createdAt: string;
 }
 
-const stageLabels: Record<string, { label: string; color: string }> = {
-  lead: { label: "Lead", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" },
-  qualified: { label: "Qualified", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  negotiating: { label: "Negotiating", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  won: { label: "Won", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  lost: { label: "Lost", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
+const stageColors: Record<string, string> = {
+  lead: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+  qualified: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  negotiating: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  won: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  lost: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
 export default function LeadsPage() {
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,9 +101,9 @@ export default function LeadsPage() {
     try {
       await invoke("update_lead_stage", { id: leadId, stage: newStage });
       await fetchLeads(debouncedSearch);
-      showToast(`Lead moved to ${newStage}`, "success");
+      showToast(t("leads.movedToStage", { stage: t(`stages.${newStage}`) }), "success");
     } catch {
-      showToast("Failed to update stage", "error");
+      showToast(t("leads.failedUpdateStage"), "error");
     }
   };
 
@@ -123,11 +125,11 @@ export default function LeadsPage() {
     try {
       const ids = Array.from(selected);
       const count = await invoke<number>("batch_delete_leads", { ids });
-      showToast(`${count} lead(s) deleted`, "success");
+      showToast(t("leads.leadsDeleted", { count }), "success");
       setSelected(new Set());
       await fetchLeads(debouncedSearch);
     } catch {
-      showToast("Failed to delete leads", "error");
+      showToast(t("leads.failedDelete"), "error");
     }
   };
 
@@ -135,11 +137,11 @@ export default function LeadsPage() {
     try {
       const ids = Array.from(selected);
       const count = await invoke<number>("batch_update_leads_stage", { ids, stage });
-      showToast(`${count} lead(s) moved to ${stageLabels[stage]?.label || stage}`, "success");
+      showToast(t("leads.leadsMoved", { count, stage: t(`stages.${stage}`) }), "success");
       setSelected(new Set());
       await fetchLeads(debouncedSearch);
     } catch {
-      showToast("Failed to move leads", "error");
+      showToast(t("leads.failedUpdateStage"), "error");
     }
   };
 
@@ -155,10 +157,10 @@ export default function LeadsPage() {
       });
       if (filePath) {
         await writeTextFile(filePath, csv);
-        showToast("CSV exported successfully", "success");
+        showToast(t("leads.csvExported"), "success");
       }
     } catch {
-      showToast("Failed to export CSV", "error");
+      showToast(t("leads.failedExportCsv"), "error");
     }
   };
 
@@ -172,9 +174,9 @@ export default function LeadsPage() {
         {/* Header */}
         <header className="mb-8 flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold mb-2">Pipeline</h1>
+            <h1 className="text-2xl font-bold mb-2">{t("leads.title")}</h1>
             <p className="text-gray-600 dark:text-gray-400">
-              {leads.length} total leads
+              {t("leads.totalLeads", { count: leads.length })}
             </p>
           </div>
           <div className="flex gap-2 items-center">
@@ -183,7 +185,7 @@ export default function LeadsPage() {
               <button
                 onClick={() => handleViewMode("list")}
                 className={`px-3 py-2 text-sm ${viewMode === "list" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
-                title="List view"
+                title={t("leads.listView")}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -192,7 +194,7 @@ export default function LeadsPage() {
               <button
                 onClick={() => handleViewMode("kanban")}
                 className={`px-3 py-2 text-sm ${viewMode === "kanban" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
-                title="Kanban view"
+                title={t("leads.kanbanView")}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
@@ -216,7 +218,7 @@ export default function LeadsPage() {
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                 />
               </svg>
-              Import File
+              {t("leads.importFile")}
             </Link>
             <button
               onClick={handleExportCSV}
@@ -235,7 +237,7 @@ export default function LeadsPage() {
                   d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              Export CSV
+              {t("leads.exportCsv")}
             </button>
           </div>
         </header>
@@ -245,7 +247,7 @@ export default function LeadsPage() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Search leads by client, title, description, notes, contact..."
+              placeholder={t("leads.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -281,7 +283,7 @@ export default function LeadsPage() {
           </div>
           {debouncedSearch && (
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Showing results for &quot;{debouncedSearch}&quot;
+              {t("leads.showingResults", { query: debouncedSearch })}
             </p>
           )}
         </div>
@@ -290,9 +292,9 @@ export default function LeadsPage() {
           /* Kanban View */
           leads.length === 0 ? (
             <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
-              <p className="text-gray-500 mb-4">No leads yet</p>
+              <p className="text-gray-500 mb-4">{t("leads.noLeads")}</p>
               <Link to="/leads/new" className="text-blue-600 hover:text-blue-700 font-medium">
-                Add your first opportunity →
+                {t("leads.addFirstLead")}
               </Link>
             </div>
           ) : (
@@ -303,7 +305,7 @@ export default function LeadsPage() {
             {/* Pipeline Overview */}
             <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
               <FilterButton
-                label="All"
+                label={t("common.all")}
                 count={leads.length}
                 active={filter === "all"}
                 onClick={() => setFilter("all")}
@@ -311,7 +313,7 @@ export default function LeadsPage() {
               {Object.entries(pipelineStats).map(([stage, count]) => (
                 <FilterButton
                   key={stage}
-                  label={stageLabels[stage].label}
+                  label={t(`stages.${stage}`)}
                   count={count}
                   active={filter === stage}
                   onClick={() => setFilter(stage)}
@@ -323,19 +325,19 @@ export default function LeadsPage() {
             {selected.size > 0 && (
               <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  {selected.size} selected
+                  {t("common.selected", { count: selected.size })}
                 </span>
                 <button
                   onClick={() => setSelected(new Set(filteredLeads.map((l) => l.id)))}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  Select all
+                  {t("common.selectAll")}
                 </button>
                 <button
                   onClick={() => setSelected(new Set())}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  Deselect all
+                  {t("common.deselectAll")}
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   <select
@@ -346,16 +348,16 @@ export default function LeadsPage() {
                     defaultValue=""
                     className="text-sm px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
                   >
-                    <option value="" disabled>Move to...</option>
-                    {Object.entries(stageLabels).map(([key, { label }]) => (
-                      <option key={key} value={key}>{label}</option>
+                    <option value="" disabled>{t("leads.moveTo")}</option>
+                    {Object.keys(stageColors).map((key) => (
+                      <option key={key} value={key}>{t(`stages.${key}`)}</option>
                     ))}
                   </select>
                   <button
                     onClick={handleBatchDelete}
                     className="text-sm px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                   >
-                    Delete
+                    {t("common.delete")}
                   </button>
                 </div>
               </div>
@@ -364,12 +366,12 @@ export default function LeadsPage() {
             {/* Leads List */}
             {filteredLeads.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                <p className="text-gray-500 mb-4">No leads yet</p>
+                <p className="text-gray-500 mb-4">{t("leads.noLeads")}</p>
                 <Link
                   to="/leads/new"
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  Add your first opportunity →
+                  {t("leads.addFirstLead")}
                 </Link>
               </div>
             ) : (
@@ -390,9 +392,9 @@ export default function LeadsPage() {
 
       <ConfirmDialog
         open={showDeleteConfirm}
-        title="Delete leads"
-        message={`Delete ${selected.size} lead(s)? This cannot be undone.`}
-        confirmLabel="Delete"
+        title={t("leads.deleteLeads")}
+        message={t("leads.deleteConfirm", { count: selected.size })}
+        confirmLabel={t("common.delete")}
         variant="danger"
         onConfirm={confirmBatchDelete}
         onCancel={() => setShowDeleteConfirm(false)}
@@ -435,8 +437,9 @@ function LeadCard({
   selected?: boolean;
   onToggle?: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const { showToast } = useToast();
-  const stage = stageLabels[lead.stage] || stageLabels.lead;
+  const stageColor = stageColors[lead.stage] || stageColors.lead;
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [actType, setActType] = useState("note");
   const [actTitle, setActTitle] = useState("");
@@ -451,11 +454,11 @@ function LeadCard({
         leadId: lead.id,
         data: { type: actType, title: actTitle.trim() },
       });
-      showToast("Activity added", "success");
+      showToast(t("leads.activityAdded"), "success");
       setActTitle("");
       setShowQuickAdd(false);
     } catch {
-      showToast("Failed to add activity", "error");
+      showToast(t("leads.failedAddActivity"), "error");
     } finally {
       setSaving(false);
     }
@@ -482,8 +485,8 @@ function LeadCard({
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-semibold">{lead.title}</h3>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${stage.color}`}>
-                    {stage.label}
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${stageColor}`}>
+                    {t(`stages.${lead.stage}`)}
                   </span>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
@@ -497,7 +500,7 @@ function LeadCard({
                 )}
                 {lead.matchScore !== null && (
                   <p className={`text-sm ${lead.matchScore >= 70 ? "text-green-600" : lead.matchScore >= 40 ? "text-yellow-600" : "text-red-600"}`}>
-                    {lead.matchScore}% match
+                    {t("leads.match", { score: lead.matchScore })}
                   </p>
                 )}
               </div>
@@ -508,7 +511,7 @@ function LeadCard({
               e.stopPropagation();
               setShowQuickAdd(!showQuickAdd);
             }}
-            title="Quick add activity"
+            title={t("leads.quickAddActivity")}
             className="px-3 py-2 mr-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -523,19 +526,19 @@ function LeadCard({
               onChange={(e) => setActType(e.target.value)}
               className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
             >
-              <option value="note">Note</option>
-              <option value="call">Call</option>
-              <option value="email">Email</option>
-              <option value="meeting">Meeting</option>
-              <option value="interview">Interview</option>
-              <option value="follow_up">Follow-up</option>
-              <option value="other">Other</option>
+              <option value="note">{t("activityTypes.note")}</option>
+              <option value="call">{t("activityTypes.call")}</option>
+              <option value="email">{t("activityTypes.email")}</option>
+              <option value="meeting">{t("activityTypes.meeting")}</option>
+              <option value="interview">{t("activityTypes.interview")}</option>
+              <option value="follow_up">{t("activityTypes.follow_up")}</option>
+              <option value="other">{t("activityTypes.other")}</option>
             </select>
             <input
               type="text"
               value={actTitle}
               onChange={(e) => setActTitle(e.target.value)}
-              placeholder="Activity title..."
+              placeholder={t("leads.activityTitle")}
               autoFocus
               className="flex-1 text-sm px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
             />
@@ -544,14 +547,14 @@ function LeadCard({
               disabled={saving || !actTitle.trim()}
               className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {saving ? "..." : "Add"}
+              {saving ? "..." : t("common.add")}
             </button>
             <button
               type="button"
               onClick={() => setShowQuickAdd(false)}
               className="text-xs px-2 py-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </form>
         )}

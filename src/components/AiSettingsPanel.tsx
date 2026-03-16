@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import DownloadProgressBar from "@/components/DownloadProgressBar";
 import type { AiSettings, DownloadProgress } from "@/types/index";
@@ -17,12 +18,6 @@ interface ProviderOption {
   label: string;
 }
 
-const BASE_PROVIDERS: ProviderOption[] = [
-  { value: "ollama", label: "Ollama (Local)" },
-  { value: "openai", label: "OpenAI" },
-  { value: "anthropic", label: "Anthropic" },
-];
-
 interface AiSettingsPanelProps {
   /** Controlled mode: external state + onChange instead of auto-saving */
   value?: AiSettings | null;
@@ -32,6 +27,7 @@ interface AiSettingsPanelProps {
 export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProps) {
   const controlled = value !== undefined && onChange !== undefined;
 
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState<DownloadProgress | null>(null);
@@ -57,6 +53,12 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   } | null>(null);
 
   const settings = controlled ? value : internalSettings;
+
+  const BASE_PROVIDERS: ProviderOption[] = [
+    { value: "ollama", label: t("ai.ollamaLocal") },
+    { value: "openai", label: t("ai.openai") },
+    { value: "anthropic", label: t("ai.anthropic") },
+  ];
 
   // Check if embedded-llm feature is compiled in
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       if (event.payload.status === "success") {
         setPulling(false);
         setPullProgress(null);
-        showToast("Model downloaded successfully", "success");
+        showToast(t("ai.modelDownloaded"), "success");
         handleCheckStatus();
       }
     });
@@ -106,7 +108,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [showToast]);
+  }, [showToast, t]);
 
   if (!settings) return null;
 
@@ -117,7 +119,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
 
   // Build providers list — include Embedded only if feature compiled in
   const providers: ProviderOption[] = embeddedAvailable
-    ? [{ value: "embedded", label: "Embedded (Built-in)" }, ...BASE_PROVIDERS]
+    ? [{ value: "embedded", label: t("ai.embedded") }, ...BASE_PROVIDERS]
     : BASE_PROVIDERS;
 
   const update = async (patch: Partial<AiSettings>) => {
@@ -129,7 +131,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
         const saved = await invoke<AiSettings>("update_ai_settings", { data: patch });
         setInternalSettings(saved);
       } catch {
-        showToast("Failed to update AI settings", "error");
+        showToast(t("ai.failedUpdateSettings"), "error");
       }
     }
   };
@@ -181,7 +183,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       await invoke("pull_ai_model", { modelName: settings.modelName });
       setPulling(false);
       setPullProgress(null);
-      showToast("Model downloaded successfully", "success");
+      showToast(t("ai.modelDownloaded"), "success");
       handleCheckStatus();
     } catch (e) {
       setPulling(false);
@@ -203,13 +205,13 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-sm">Enable AI Features</p>
+          <p className="font-medium text-sm">{t("ai.enableAi")}</p>
           <p className="text-xs text-gray-500">
             {isEmbedded
-              ? "Uses built-in local model (no setup required)"
+              ? t("ai.embeddedDesc")
               : isOllama
-                ? "Requires Ollama running locally"
-                : `Uses ${provider === "openai" ? "OpenAI" : "Anthropic"} API with your key`}
+                ? t("ai.ollamaDesc")
+                : t("ai.apiDesc", { provider: provider === "openai" ? t("ai.openai") : t("ai.anthropic") })}
           </p>
         </div>
         <button
@@ -230,7 +232,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       {/* Provider Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Provider
+          {t("ai.provider")}
         </label>
         <div className="flex gap-2 flex-wrap">
           {providers.map((p) => (
@@ -269,15 +271,15 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 {isEmbedded
                   ? displayStatus?.modelAvailable
-                    ? "Model ready (~2.2 GB)"
-                    : "Model not downloaded"
+                    ? t("ai.modelReady")
+                    : t("ai.modelNotDownloaded")
                   : isOllama
                     ? displayStatus?.available
-                      ? "Ollama connected"
-                      : "Ollama not reachable"
+                      ? t("ai.ollamaConnected")
+                      : t("ai.ollamaNotReachable")
                     : displayStatus?.available
-                      ? "API key configured"
-                      : "API key missing"}
+                      ? t("ai.apiKeyConfigured")
+                      : t("ai.apiKeyMissing")}
               </span>
               <button
                 type="button"
@@ -285,7 +287,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                 disabled={checking}
                 className="text-xs text-blue-600 hover:text-blue-700 ml-auto"
               >
-                {checking ? "Checking..." : "Refresh"}
+                {checking ? t("common.checking") : t("common.refresh")}
               </button>
             </div>
             {isOllama &&
@@ -303,8 +305,8 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                     />
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       {modelReady
-                        ? `${settings.modelName} ready`
-                        : `${settings.modelName} not pulled`}
+                        ? t("ai.modelReadyNamed", { model: settings.modelName })
+                        : t("ai.modelNotPulled", { model: settings.modelName })}
                     </span>
                   </div>
                 );
@@ -315,13 +317,13 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
           {isEmbedded && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Model
+                {t("ai.model")}
               </label>
               <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-400">
-                Phi-3.5 Mini (Q4_K_M)
+                {t("ai.embeddedModelName")}
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Optimized for local inference. Runs entirely on your device.
+                {t("ai.embeddedModelDesc")}
               </p>
 
               {!displayStatus?.modelAvailable && (
@@ -332,7 +334,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                     disabled={pulling}
                     className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
-                    {pulling ? "Downloading..." : "Download Model (~2.2 GB)"}
+                    {pulling ? t("ai.downloading") : t("ai.downloadModel")}
                   </button>
                   {pullProgress && (
                     <div className="mt-2">
@@ -352,7 +354,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
           {isApiProvider && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                API Key
+                {t("ai.apiKey")}
               </label>
               <input
                 type="password"
@@ -366,7 +368,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                 }
               />
               <p className="text-xs text-gray-500 mt-1">
-                Stored locally on your device. Never sent to our servers.
+                {t("ai.apiKeyStoredLocally")}
               </p>
             </div>
           )}
@@ -375,7 +377,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
           {!isEmbedded && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Model
+                {t("ai.model")}
               </label>
               <div className="flex gap-2">
                 <input
@@ -424,7 +426,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
           {isOllama && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Ollama URL
+                {t("ai.ollamaUrl")}
               </label>
               <input
                 type="text"
@@ -444,12 +446,12 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                 onClick={() => setShowBaseUrl(!showBaseUrl)}
                 className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               >
-                {showBaseUrl ? "Hide" : "Show"} advanced options
+                {showBaseUrl ? t("ai.hideAdvanced") : t("ai.showAdvanced")}
               </button>
               {showBaseUrl && (
                 <div className="mt-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Base URL
+                    {t("ai.baseUrl")}
                   </label>
                   <input
                     type="text"
@@ -459,7 +461,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                     placeholder="https://api.openai.com/v1"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Override for OpenAI-compatible APIs (Azure, OpenRouter, Groq, etc.)
+                    {t("ai.baseUrlHint")}
                   </p>
                 </div>
               )}
@@ -475,7 +477,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                 disabled={pulling || !settings.modelName}
                 className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
               >
-                {pulling ? "Downloading..." : `Pull "${settings.modelName}"`}
+                {pulling ? t("ai.downloading") : t("ai.pullModel", { model: settings.modelName })}
               </button>
               {pullProgress && (
                 <div className="mt-2">

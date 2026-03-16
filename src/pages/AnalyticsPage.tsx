@@ -1,21 +1,23 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
 import type { AnalyticsData } from "@/types/index";
 
-const stageLabels: Record<string, string> = {
-  lead: "Lead",
-  qualified: "Qualified",
-  negotiating: "Negotiating",
-  won: "Won",
-  lost: "Lost",
-};
-
 export default function AnalyticsPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const stageLabels: Record<string, string> = {
+    lead: t("stages.lead"),
+    qualified: t("stages.qualified"),
+    negotiating: t("stages.negotiating"),
+    won: t("stages.won"),
+    lost: t("stages.lost"),
+  };
 
   const loadData = () => {
     setLoading(true);
@@ -38,7 +40,7 @@ export default function AnalyticsPage() {
   }
 
   if (error || !data) {
-    return <ErrorState message={error || "Failed to load analytics"} onRetry={loadData} />;
+    return <ErrorState message={error || t("analytics.failedToLoad")} onRetry={loadData} />;
   }
 
   const maxMonthlyCount = Math.max(...data.monthlyLeadCount.map((m) => m.count), 1);
@@ -48,42 +50,42 @@ export default function AnalyticsPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Pipeline Analytics</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("analytics.title")}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Insights and metrics for your pipeline performance
+            {t("analytics.subtitle")}
           </p>
         </header>
 
         {/* Key Metrics */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Key Metrics</h2>
+          <h2 className="text-lg font-semibold mb-4">{t("analytics.keyMetrics")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
-              label="Win Rate"
+              label={t("analytics.winRate")}
               value={`${data.winRate}%`}
-              sublabel="Won / (Won + Lost)"
+              sublabel={t("analytics.winRateDesc")}
               color="green"
             />
             <StatCard
-              label="Pipeline Value"
+              label={t("analytics.pipelineValue")}
               value={formatCurrency(data.totalPipelineValue)}
-              sublabel="Active leads value"
+              sublabel={t("analytics.pipelineValueDesc")}
               color="blue"
             />
             <StatCard
-              label="Total Leads"
+              label={t("analytics.totalLeads")}
               value={data.totalLeads.toString()}
-              sublabel="All time"
+              sublabel={t("analytics.totalLeadsDesc")}
               color="gray"
             />
             <StatCard
-              label="Active Leads"
+              label={t("analytics.activeLeads")}
               value={(
                 data.stageCounts.lead +
                 data.stageCounts.qualified +
                 data.stageCounts.negotiating
               ).toString()}
-              sublabel="In pipeline"
+              sublabel={t("analytics.activeLeadsDesc")}
               color="yellow"
             />
           </div>
@@ -91,38 +93,38 @@ export default function AnalyticsPage() {
 
         {/* Conversion Funnel */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Conversion Funnel</h2>
+          <h2 className="text-lg font-semibold mb-4">{t("analytics.conversionFunnel")}</h2>
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <div className="space-y-4">
               <FunnelStage
-                from="Lead"
-                to="Qualified"
+                from={t("stages.lead")}
+                to={t("stages.qualified")}
                 rate={data.conversionRates.leadToQualified}
                 count={data.stageCounts.lead}
               />
               <FunnelStage
-                from="Qualified"
-                to="Negotiating"
+                from={t("stages.qualified")}
+                to={t("stages.negotiating")}
                 rate={data.conversionRates.qualifiedToNegotiating}
                 count={data.stageCounts.qualified}
               />
               <FunnelStage
-                from="Negotiating"
-                to="Won"
+                from={t("stages.negotiating")}
+                to={t("stages.won")}
                 rate={data.conversionRates.negotiatingToWon}
                 count={data.stageCounts.negotiating}
               />
               <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
                   <span className="w-24 text-sm font-medium text-green-600 dark:text-green-400">
-                    Won
+                    {t("stages.won")}
                   </span>
                   <span className="text-sm text-gray-500">{data.stageCounts.won} deals</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-500">{data.stageCounts.lost} lost</span>
                   <span className="w-24 text-sm font-medium text-red-600 dark:text-red-400 text-right">
-                    Lost
+                    {t("stages.lost")}
                   </span>
                 </div>
               </div>
@@ -142,7 +144,7 @@ export default function AnalyticsPage() {
                       {stageLabels[stage] || stage}
                     </span>
                     <span className="font-medium">
-                      {days !== null ? `${days} days` : "-"}
+                      {days !== null ? `${days} ${t("common.days")}` : "-"}
                     </span>
                   </div>
                 ))}
@@ -181,10 +183,10 @@ export default function AnalyticsPage() {
 
           {/* Leads by Source */}
           <section>
-            <h2 className="text-lg font-semibold mb-4">Leads by Source</h2>
+            <h2 className="text-lg font-semibold mb-4">{t("analytics.sourceBreakdown")}</h2>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               {data.sourceBreakdown.length === 0 ? (
-                <p className="text-gray-500 text-sm">No data yet</p>
+                <p className="text-gray-500 text-sm">{t("common.noResults")}</p>
               ) : (
                 <div className="space-y-3">
                   {data.sourceBreakdown.map(({ source, count }) => {
@@ -214,10 +216,10 @@ export default function AnalyticsPage() {
 
           {/* Monthly Trend */}
           <section>
-            <h2 className="text-lg font-semibold mb-4">Monthly Lead Trend</h2>
+            <h2 className="text-lg font-semibold mb-4">{t("analytics.monthlyTrend")}</h2>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               {data.monthlyLeadCount.every((m) => m.count === 0) ? (
-                <p className="text-gray-500 text-sm">No data yet</p>
+                <p className="text-gray-500 text-sm">{t("common.noResults")}</p>
               ) : (
                 <div className="flex items-end gap-2 h-32">
                   {data.monthlyLeadCount.map(({ month, count }) => {

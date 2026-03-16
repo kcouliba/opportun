@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSync } from "@/hooks/useSync";
 import { useToast } from "@/components/Toast";
 
 export default function SyncPanel() {
+  const { t } = useTranslation();
   const {
     status,
     loading,
@@ -25,7 +27,7 @@ export default function SyncPanel() {
   const [conflictPending, setConflictPending] = useState(false);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading sync status...</p>;
+    return <p className="text-sm text-gray-500">{t("sync.loading")}</p>;
   }
 
   if (!available) return null;
@@ -36,25 +38,25 @@ export default function SyncPanel() {
     if (result.action === "conflict") {
       setConflictPending(true);
     } else if (result.action === "pushed") {
-      showToast("Changes pushed to relay", "success");
+      showToast(t("sync.pushedToRelay"), "success");
     } else if (result.action === "pulled") {
-      showToast("Data synced from other device. Reloading...", "success");
+      showToast(t("sync.syncedFromDevice"), "success");
       setTimeout(() => window.location.reload(), 1000);
     } else {
-      showToast("Already up to date", "info");
+      showToast(t("sync.upToDate"), "info");
     }
   };
 
   const handleConflict = async (choice: "keep_remote" | "keep_local" | "export_first") => {
     if (choice === "export_first") {
-      showToast("Export a backup first, then choose Keep Remote", "info");
+      showToast(t("sync.exportFirst"), "info");
       return;
     }
     const result = await resolveConflict(choice);
     if (result) {
       setConflictPending(false);
       showToast(
-        choice === "keep_remote" ? "Remote data restored" : "Local data pushed",
+        choice === "keep_remote" ? t("sync.remoteRestored") : t("sync.localPushed"),
         "success"
       );
     }
@@ -67,7 +69,7 @@ export default function SyncPanel() {
     if (ok) {
       setShowJoin(false);
       setJoinCode("");
-      showToast("Paired successfully!", "success");
+      showToast(t("sync.pairedSuccess"), "success");
     }
   };
 
@@ -78,28 +80,28 @@ export default function SyncPanel() {
   const handleSaveName = async () => {
     await updateDeviceName(deviceName);
     setEditingName(false);
-    showToast("Device name updated", "success");
+    showToast(t("sync.deviceNameUpdated"), "success");
   };
 
   // Sync status indicator
   const getSyncIndicator = () => {
-    if (!status?.paired) return { color: "bg-gray-400", label: "Not paired" };
-    if (!status.lastSyncedAt) return { color: "bg-gray-400", label: "Never synced" };
+    if (!status?.paired) return { color: "bg-gray-400", label: t("sync.notPaired") };
+    if (!status.lastSyncedAt) return { color: "bg-gray-400", label: t("sync.neverSynced") };
 
     const lastSync = new Date(status.lastSyncedAt);
     const minutesAgo = (Date.now() - lastSync.getTime()) / 60000;
 
-    if (minutesAgo < 5) return { color: "bg-green-500", label: "Synced just now" };
+    if (minutesAgo < 5) return { color: "bg-green-500", label: t("sync.syncedJustNow") };
     if (minutesAgo < 60)
-      return { color: "bg-green-500", label: `Synced ${Math.round(minutesAgo)}m ago` };
+      return { color: "bg-green-500", label: t("sync.syncedMinutes", { count: Math.round(minutesAgo) }) };
     if (minutesAgo < 1440)
       return {
         color: "bg-orange-500",
-        label: `Synced ${Math.round(minutesAgo / 60)}h ago`,
+        label: t("sync.syncedHours", { count: Math.round(minutesAgo / 60) }),
       };
     return {
       color: "bg-orange-500",
-      label: `Synced ${Math.round(minutesAgo / 1440)}d ago`,
+      label: t("sync.syncedDays", { count: Math.round(minutesAgo / 1440) }),
     };
   };
 
@@ -111,10 +113,10 @@ export default function SyncPanel() {
       <div className="space-y-4">
         <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
           <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
-            Sync Conflict
+            {t("sync.conflictTitle")}
           </h3>
           <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-            Your other device has newer changes, but you also have local changes.
+            {t("sync.conflictDesc")}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -122,20 +124,20 @@ export default function SyncPanel() {
               disabled={syncing}
               className="btn btn-secondary text-sm"
             >
-              Keep Remote
+              {t("sync.keepRemote")}
             </button>
             <button
               onClick={() => handleConflict("keep_local")}
               disabled={syncing}
               className="btn btn-secondary text-sm"
             >
-              Keep Local
+              {t("sync.keepLocal")}
             </button>
             <button
               onClick={() => handleConflict("export_first")}
               className="btn btn-secondary text-sm"
             >
-              Export Backup First
+              {t("sync.exportBackupFirst")}
             </button>
           </div>
         </div>
@@ -160,7 +162,7 @@ export default function SyncPanel() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">This device:</span>
+            <span className="text-sm text-gray-500">{t("sync.thisDevice")}</span>
             {editingName ? (
               <div className="flex items-center gap-2">
                 <input
@@ -172,13 +174,13 @@ export default function SyncPanel() {
                   autoFocus
                 />
                 <button onClick={handleSaveName} className="text-sm text-blue-600 hover:underline">
-                  Save
+                  {t("common.save")}
                 </button>
                 <button
                   onClick={() => setEditingName(false)}
                   className="text-sm text-gray-500 hover:underline"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             ) : (
@@ -189,7 +191,7 @@ export default function SyncPanel() {
                 }}
                 className="text-sm font-medium hover:underline"
               >
-                {status.deviceName || "Unnamed device"}
+                {status.deviceName || t("sync.unnamedDevice")}
               </button>
             )}
           </div>
@@ -200,16 +202,16 @@ export default function SyncPanel() {
               disabled={syncing}
               className="btn btn-secondary"
             >
-              {syncing ? "Syncing..." : "Sync Now"}
+              {syncing ? t("sync.syncing") : t("sync.syncNow")}
             </button>
             <button
               onClick={async () => {
                 await unpair();
-                showToast("Device unpaired", "info");
+                showToast(t("sync.unpaired"), "info");
               }}
               className="btn btn-secondary text-red-600 dark:text-red-400"
             >
-              Unpair
+              {t("sync.unpair")}
             </button>
           </div>
         </div>
@@ -219,7 +221,7 @@ export default function SyncPanel() {
           {pairingOffer ? (
             <div className="space-y-3">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Share this code with your other device:
+                {t("sync.shareCode")}
               </p>
               <div className="flex justify-center">
                 <img
@@ -239,21 +241,21 @@ export default function SyncPanel() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(pairingOffer.textCode);
-                    showToast("Code copied!", "success");
+                    showToast(t("sync.codeCopied"), "success");
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 hover:underline"
                 >
-                  Copy
+                  {t("common.copyToClipboard")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="flex gap-2">
               <button onClick={handleInitiate} className="btn btn-secondary">
-                Link a Device
+                {t("sync.linkDevice")}
               </button>
               <button onClick={() => setShowJoin(true)} className="btn btn-secondary">
-                Join Existing
+                {t("sync.joinExisting")}
               </button>
             </div>
           )}
@@ -261,7 +263,7 @@ export default function SyncPanel() {
           {showJoin && (
             <div className="space-y-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Paste the pairing code from your other device:
+                {t("sync.pasteCode")}
               </p>
               <div className="flex gap-2">
                 <input
@@ -270,11 +272,11 @@ export default function SyncPanel() {
                   onChange={(e) => setJoinCode(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleJoin()}
                   className="input flex-1 text-sm font-mono"
-                  placeholder="Paste pairing code..."
+                  placeholder={t("sync.pairingPlaceholder")}
                   autoFocus
                 />
                 <button onClick={handleJoin} className="btn btn-secondary">
-                  Pair
+                  {t("sync.pair")}
                 </button>
                 <button
                   onClick={() => {
@@ -283,7 +285,7 @@ export default function SyncPanel() {
                   }}
                   className="btn btn-secondary"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>

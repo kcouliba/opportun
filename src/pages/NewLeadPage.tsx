@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
 
@@ -41,6 +42,7 @@ const defaultLead: LeadForm = {
 };
 
 export default function NewLeadPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [lead, setLead] = useState<LeadForm>(defaultLead);
@@ -52,11 +54,11 @@ export default function NewLeadPage() {
     e.preventDefault();
 
     if (!lead.title.trim()) {
-      showToast("Job title is required", "error");
+      showToast(t("newLead.titleRequired"), "error");
       return;
     }
     if (!lead.client.trim()) {
-      showToast("Client is required", "error");
+      showToast(t("newLead.clientRequired"), "error");
       return;
     }
 
@@ -71,10 +73,10 @@ export default function NewLeadPage() {
 
     try {
       const newLead = await invoke<{ id: string }>("create_lead", { data: payload });
-      showToast("Lead added successfully", "success");
+      showToast(t("newLead.leadAdded"), "success");
       navigate(`/leads/${newLead.id}`);
     } catch {
-      showToast("Failed to create lead. Make sure you have a profile set up first.", "error");
+      showToast(t("newLead.failedCreate"), "error");
       setSaving(false);
     }
   };
@@ -98,113 +100,113 @@ export default function NewLeadPage() {
     <main className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Add New Lead</h1>
+          <h1 className="text-2xl font-bold mb-2">{t("newLead.title")}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Enter the opportunity details. We&apos;ll score it against your profile.
+            {t("newLead.subtitle")}
           </p>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basic Info */}
-          <Section title="Opportunity">
-            <Field label="Job Title" required>
+          <Section title={t("newLead.opportunity")}>
+            <Field label={t("newLead.jobTitle")} required>
               <input
                 type="text"
                 value={lead.title}
                 onChange={(e) => setLead({ ...lead, title: e.target.value })}
                 className="input"
-                placeholder="e.g., Senior React Developer"
+                placeholder={t("newLead.jobTitlePlaceholder")}
                 required
               />
             </Field>
-            <Field label="Client / Company" required>
+            <Field label={t("newLead.client")} required>
               <input
                 type="text"
                 value={lead.client}
                 onChange={(e) => setLead({ ...lead, client: e.target.value })}
                 className="input"
-                placeholder="e.g., Acme Corp"
+                placeholder={t("newLead.clientPlaceholder")}
                 required
               />
             </Field>
-            <Field label="Description">
+            <Field label={t("newLead.description")}>
               <textarea
                 value={lead.description}
                 onChange={(e) => setLead({ ...lead, description: e.target.value })}
                 className="input min-h-[100px]"
-                placeholder="Paste the job description or key details..."
+                placeholder={t("newLead.descriptionPlaceholder")}
               />
             </Field>
           </Section>
 
           {/* Source */}
-          <Section title="Source">
+          <Section title={t("newLead.source")}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Source">
+              <Field label={t("newLead.source")}>
                 <LeadSourceSelect
                   value={lead.source}
                   onChange={(v) => setLead({ ...lead, source: v })}
                   className="input"
                 />
               </Field>
-              <Field label="Source URL">
+              <Field label={t("newLead.sourceUrl")}>
                 <input
                   type="url"
                   value={lead.sourceUrl}
                   onChange={(e) => setLead({ ...lead, sourceUrl: e.target.value })}
                   className="input"
-                  placeholder="Link to posting"
+                  placeholder={t("newLead.sourceUrlPlaceholder")}
                 />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Contact Name">
+              <Field label={t("newLead.contactName")}>
                 <input
                   type="text"
                   value={lead.contactName}
                   onChange={(e) => setLead({ ...lead, contactName: e.target.value })}
                   className="input"
-                  placeholder="Recruiter or hiring manager"
+                  placeholder={t("newLead.contactNamePlaceholder")}
                 />
               </Field>
-              <Field label="Contact Info">
+              <Field label={t("newLead.contactInfo")}>
                 <input
                   type="text"
                   value={lead.contactInfo}
                   onChange={(e) => setLead({ ...lead, contactInfo: e.target.value })}
                   className="input"
-                  placeholder="Email or phone"
+                  placeholder={t("newLead.contactInfoPlaceholder")}
                 />
               </Field>
             </div>
           </Section>
 
           {/* Location & Rate */}
-          <Section title="Details">
+          <Section title={t("newLead.details")}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Location">
+              <Field label={t("newLead.location")}>
                 <input
                   type="text"
                   value={lead.location}
                   onChange={(e) => setLead({ ...lead, location: e.target.value })}
                   className="input"
-                  placeholder="e.g., Paris, Remote"
+                  placeholder={t("newLead.locationPlaceholder")}
                 />
               </Field>
-              <Field label="Remote Policy">
+              <Field label={t("newLead.remotePolicy")}>
                 <select
                   value={lead.remotePolicy}
                   onChange={(e) => setLead({ ...lead, remotePolicy: e.target.value })}
                   className="input"
                 >
-                  <option value="remote">Full Remote</option>
-                  <option value="hybrid">Hybrid</option>
-                  <option value="onsite">On-site</option>
+                  <option value="remote">{t("newLead.remote")}</option>
+                  <option value="hybrid">{t("newLead.hybrid")}</option>
+                  <option value="onsite">{t("newLead.onsite")}</option>
                 </select>
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Offered Rate">
+              <Field label={t("newLead.offeredRate")}>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -215,10 +217,10 @@ export default function NewLeadPage() {
                     className="input w-28"
                     min={0}
                   />
-                  <span className="text-gray-500">€/day</span>
+                  <span className="text-gray-500">{t("common.perDay")}</span>
                 </div>
               </Field>
-              <Field label="Estimated Duration">
+              <Field label={t("newLead.estimatedDuration")}>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -229,11 +231,11 @@ export default function NewLeadPage() {
                     className="input w-20"
                     min={1}
                   />
-                  <span className="text-gray-500">months</span>
+                  <span className="text-gray-500">{t("common.months")}</span>
                 </div>
               </Field>
             </div>
-            <Field label="Estimated Start Date">
+            <Field label={t("newLead.estimatedStart")}>
               <input
                 type="date"
                 value={lead.estimatedStartDate}
@@ -244,8 +246,8 @@ export default function NewLeadPage() {
           </Section>
 
           {/* Requirements */}
-          <Section title="Requirements">
-            <Field label="Required Technologies">
+          <Section title={t("newLead.requirements")}>
+            <Field label={t("newLead.technologies")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -258,14 +260,14 @@ export default function NewLeadPage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., React, TypeScript..."
+                  placeholder={t("newLead.technologiesPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("requiredTechnologies", techInput, setTechInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList
@@ -273,7 +275,7 @@ export default function NewLeadPage() {
                 onRemove={(v) => removeFromArray("requiredTechnologies", v)}
               />
             </Field>
-            <Field label="Domain">
+            <Field label={t("newLead.domain")}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -286,14 +288,14 @@ export default function NewLeadPage() {
                     }
                   }}
                   className="input flex-1"
-                  placeholder="e.g., Fintech, Healthcare..."
+                  placeholder={t("newLead.domainPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => addToArray("requiredDomains", domainInput, setDomainInput)}
                   className="btn btn-secondary"
                 >
-                  Add
+                  {t("common.add")}
                 </button>
               </div>
               <TagList
@@ -304,13 +306,13 @@ export default function NewLeadPage() {
           </Section>
 
           {/* Notes */}
-          <Section title="Notes">
-            <Field label="Additional Notes">
+          <Section title={t("newLead.notes")}>
+            <Field label={t("newLead.additionalNotes")}>
               <textarea
                 value={lead.notes}
                 onChange={(e) => setLead({ ...lead, notes: e.target.value })}
                 className="input min-h-[80px]"
-                placeholder="Any other relevant information..."
+                placeholder={t("newLead.notesPlaceholder")}
               />
             </Field>
           </Section>
@@ -318,10 +320,10 @@ export default function NewLeadPage() {
           {/* Actions */}
           <div className="flex gap-4 pt-4">
             <button type="submit" disabled={saving} className="btn btn-primary">
-              {saving ? "Saving..." : "Add Lead"}
+              {saving ? t("common.saving") : t("newLead.addLead")}
             </button>
             <button type="button" onClick={() => navigate("/leads")} className="btn btn-secondary">
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
