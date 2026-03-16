@@ -5,30 +5,35 @@
 ## Current State (v0.2.0)
 
 **What works:**
-- 12 pages: Dashboard, Leads (list/kanban/detail/new/quick-capture), Missions (list/detail/new), Activities, Analytics, Profile, Settings
+- 13 pages: Dashboard, Leads (list/kanban/detail/new/quick-capture), Missions (list/detail/new), Activities, Analytics, Profile, Settings, Watch Sources
 - Full CRUD on all entities with SQLite backend
 - Lead match scoring (tech/domain/rate/location/blacklist)
-- Local AI via Ollama — job parsing, lead analysis, cover letter generation, interview prep
+- Multi-provider AI: Ollama (local), OpenAI, Anthropic via BYOK, optional embedded LLM (llama.cpp with GPU acceleration)
 - AI task queue — serialized requests with progress in status bar
 - Lead analysis persists as Document, auto-triggers on lead create, loads from cache on revisit
 - File import from Leads list (PDF/TXT/MD via Quick Capture)
 - Content language setting (FR/EN) on profile with per-lead override for AI-generated content
 - LinkedIn profile import (PDF upload or paste) with mission extraction and selection wizard
-- Document generation (AI-powered cover letters, interview prep, template-based key questions)
-- CSV export, search with debounce, pagination
+- Document generation (AI-powered cover letters, interview prep, application messages)
+- Resume PDF export from profile
+- CSV export, search with debounce, pagination, batch actions (bulk delete/stage update)
 - Database backup (VACUUM INTO) and restore (SQLite backup API) from Settings
 - Kanban board view with drag-and-drop between pipeline stages
 - Startup alerts (in-app toasts) for overdue follow-ups and ending missions
 - Income forecasting dashboard with 6-month projection and intelligent alerts
 - Error boundaries per page with fallback UI
 - Dynamic lead sources management in Settings
-- MCP server with 18 tools (direct SQLite)
-- Dark mode, responsive layout, toast notifications
+- Watch sources for automated job board monitoring with bulk import
+- MCP server with 18 tools (direct SQLite), HTTP transport with bearer token auth
+- Encrypted cross-device sync via relay (feature-flagged `--features sync`)
+- Responsive left sidebar navigation with sync indicator
+- Dark mode, toast notifications
 
 **What's missing:**
 - No release automation (CI runs on push/PR)
 - Desktop features underutilized (no app menu, no keyboard shortcuts)
 - No accessibility (0 aria labels)
+- Resume PDF layout needs polish
 
 ---
 
@@ -45,38 +50,42 @@ _Foundation work before adding features._
 
 ---
 
-## Phase 2 — Local AI Integration
+## Phase 2 — AI Integration ✓
 
-_On-device intelligence — private, offline, no API keys required._
-
-### Design decisions
-
-- **AI is optional** — App works fully without AI. Current regex parser and templates remain as fallback. AI features are enhancements toggled on in settings.
-- **Ollama-based** — AI features use Ollama (HTTP to localhost:11434). User installs Ollama separately and pulls models.
-- **Model-agnostic** — Default suggestion: Llama 3.2 3B. User can switch to Mistral 7B or others in settings. Runtime doesn't care.
+_Multi-provider AI — local-first with optional cloud providers._
 
 ### Architecture
 
 ```
 LlmProvider trait
-└── OllamaProvider  (HTTP to localhost:11434)
+├── OllamaProvider     (HTTP to localhost:11434)
+├── OpenAiProvider     (BYOK — OpenAI-compatible APIs)
+├── AnthropicProvider  (BYOK — Claude API)
+└── EmbeddedProvider   (llama.cpp via llama-cpp-2, feature-flagged)
+    ├── CPU inference (default)
+    ├── CUDA (--features embedded-llm-cuda)
+    ├── Metal (--features embedded-llm-metal)
+    └── Vulkan (--features embedded-llm-vulkan)
 
-Config: user picks model in Settings, stored in DB
+Config: user picks provider + model in Settings, stored in DB
 ```
 
 ### DONE
 
-- [x] **Local LLM runtime** — `LlmProvider` trait + Ollama backend + settings UI ("Enable AI" toggle, model picker, download progress).
-- [x] **Job description parsing v2** — Replace regex-based QuickCapture with LLM extraction. Input: raw job post text → Output: structured JSON (title, client, technologies, rate, location, remote policy, requirements). Fallback to current regex if AI disabled.
-- [x] **Smart lead analysis** — AI summary per lead: strengths, risks, talking points, fit assessment beyond numeric score. Persisted as Document, auto-triggers on lead create, loads from cache on revisit.
-- [x] **Cover letter rewrite** — Use local LLM to personalize generated cover letters instead of rigid templates
-- [x] **Interview prep** — Generate contextual questions and answers based on lead requirements + profile match
+- [x] **Local LLM runtime** — `LlmProvider` trait + Ollama backend + settings UI ("Enable AI" toggle, model picker, download progress)
+- [x] **BYOK providers** — OpenAI and Anthropic API support with API key management in Settings
+- [x] **Embedded LLM** — llama.cpp integration (feature-flagged `embedded-llm`), auto-download from HuggingFace, GPU acceleration, auto-unload idle models, GGUF chat template support
+- [x] **Job description parsing v2** — LLM extraction of structured JSON from raw job text, fallback to regex if AI disabled
+- [x] **Smart lead analysis** — AI summary per lead: strengths, risks, talking points, fit assessment. Persisted as Document, auto-triggers on create
+- [x] **Cover letter rewrite** — LLM-personalized cover letters
+- [x] **Interview prep** — Contextual questions and answers based on lead requirements + profile match
+- [x] **Application messages** — AI-generated outreach messages with tone/length presets
 - [x] **Content language** — Profile-level default (FR/EN) with per-lead override, injected into all AI prompts
-- [x] **LinkedIn profile import** — PDF upload or paste text, AI-powered extraction, mission selection wizard
-- [x] **Auto-analyze on lead create** — Triggers analysis on first visit to LeadDetail, persists result, loads from cache on revisit
-- [x] **Parse lead from document** — "Import File" button on Leads list, opens Quick Capture in file mode with auto file dialog
-
-- [x] **Activity insights** — Summarize activity history per lead ("3 calls over 2 weeks, last contact 5 days ago, tone: positive")
+- [x] **LinkedIn profile import** — PDF upload or paste text, AI extraction, mission selection wizard
+- [x] **AI resume import** — Parse resume PDFs/text into structured profile data
+- [x] **Auto-analyze on lead create** — Triggers analysis on first visit to LeadDetail, persists result
+- [x] **Parse lead from document** — "Import File" button on Leads list, opens Quick Capture with auto file dialog
+- [x] **Activity insights** — Summarize activity history per lead
 
 ---
 
@@ -87,9 +96,11 @@ _High-impact features for daily pipeline management._
 - [x] **Database backup/restore** — Export full DB (VACUUM INTO), restore via SQLite backup API, validate before import
 - [x] **Follow-up reminders** — In-app toasts on startup for overdue and due-today follow-ups
 - [x] **System notifications** — Startup alerts when a mission ends within 30 days
-- [x] **Kanban board view** — Drag-and-drop leads between pipeline stages (@hello-pangea/dnd), with list/kanban toggle persisted in localStorage
+- [x] **Kanban board view** — Drag-and-drop leads between pipeline stages, list/kanban toggle persisted
 - [x] **Error boundaries** — React error boundary wrapping App + per-page boundaries with fallback UI
 - [x] **AI task queue** — Serialize AI requests, prevent overlapping calls, show progress in a status bar
+- [x] **Resume PDF export** — Generate and save resume from profile + missions data
+- [x] **Watch sources** — Automated job board monitoring with AI-powered listing extraction and bulk import
 
 ---
 
@@ -97,10 +108,12 @@ _High-impact features for daily pipeline management._
 
 _Make daily use faster and more pleasant._
 
-- [ ] **Bulk actions** — Select multiple leads to change stage, delete, or export
+- [x] **Bulk actions** — Select multiple leads to change stage or delete
+- [x] **Responsive sidebar** — Replace top nav with collapsible left sidebar, mobile bottom nav
 - [ ] **Activity quick-add** — Add activity directly from leads list without navigating to detail
 - [ ] **Breadcrumbs** — Show page hierarchy in detail views (Leads > ClientName > Edit)
-- [ ] **Localize application** — i18n support (French/English at minimum). Extract all UI strings, use a translation framework (e.g., react-i18next). Locale follows profile `contentLanguage` setting or system locale.
+- [ ] **Localize application** — i18n support (French/English at minimum). Extract all UI strings, use react-i18next. Locale follows profile `contentLanguage` setting or system locale
+- [ ] **Resume layout polish** — Improve PDF resume template design and formatting
 
 ---
 
@@ -121,12 +134,12 @@ _Leverage Tauri properly — make it feel native and shippable._
 _Deeper value for power users._
 
 - [x] **Revenue dashboard** — Forecast income based on pipeline probability and mission schedule (6-month projection, secured + weighted pipeline income)
+- [x] **Encrypted cross-device sync** — Signal-like peer-to-peer sync (feature-flagged `--features sync`). XChaCha20-Poly1305 encryption, zstd-compressed full-DB snapshots, QR/text code pairing, ephemeral relay protocol. Conflict resolution UI in Settings
 - [ ] **Email template system** — Customizable outreach templates (not just generated cover letters)
 - [ ] **Lead source analytics** — Which sources convert best? Track ROI per source
 - [ ] **Calendar view** — Visualize missions timeline and upcoming activities
 - [ ] **Tagging system** — Custom tags on leads for flexible categorization beyond stages
 - [ ] **Document versioning** — Edit and track versions of generated documents
-- [ ] **Data sync** — Optional cloud backup (encrypted) for cross-device access
 
 ---
 
@@ -134,6 +147,7 @@ _Deeper value for power users._
 
 _Extend beyond the app._
 
+- [x] **MCP HTTP transport** — HTTP/SSE transport with bearer token auth (alongside existing stdio), configurable via Settings
 - [ ] **MCP improvements** — Add document generation, mission management, and profile tools to MCP server
 - [ ] **Browser extension** — Capture leads from job boards (Malt, Crème de la Crème, LinkedIn) with one click
 
@@ -151,4 +165,4 @@ Things explicitly out of scope:
 
 ---
 
-_Last updated: 2026-03-06_
+_Last updated: 2026-03-16_
