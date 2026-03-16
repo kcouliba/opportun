@@ -104,16 +104,16 @@ _High-impact features for daily pipeline management._
 
 ---
 
-## Phase 4 — UX Improvements
+## Phase 4 — UX Improvements ✓
 
 _Make daily use faster and more pleasant._
 
 - [x] **Bulk actions** — Select multiple leads to change stage or delete
 - [x] **Responsive sidebar** — Replace top nav with collapsible left sidebar, mobile bottom nav
-- [ ] **Activity quick-add** — Add activity directly from leads list without navigating to detail
-- [ ] **Breadcrumbs** — Show page hierarchy in detail views (Leads > ClientName > Edit)
-- [ ] **Localize application** — i18n support (French/English at minimum). Extract all UI strings, use react-i18next. Locale follows profile `contentLanguage` setting or system locale
-- [ ] **Resume layout polish** — Improve PDF resume template design and formatting
+- [x] **Activity quick-add** — Inline activity form on each lead card in list view (type + title)
+- [x] **Breadcrumbs** — Hierarchical navigation on LeadDetail, MissionDetail, QuickCapture pages
+- [x] **Localize application** — i18n with react-i18next (French/English). Browser locale detection, language switcher in Settings, AI content follows app locale with per-lead override
+- [x] **Resume layout polish** — Professional PDF template with blue section titles, smart bullet parsing, proper page wrapping
 
 ---
 
@@ -149,7 +149,6 @@ _Extend beyond the app._
 
 - [x] **MCP HTTP transport** — HTTP/SSE transport with bearer token auth (alongside existing stdio), configurable via Settings
 - [ ] **MCP improvements** — Add document generation, mission management, and profile tools to MCP server
-- [ ] **Browser extension** — Capture leads from job boards (Malt, Crème de la Crème, LinkedIn) with one click
 
 ---
 
@@ -165,4 +164,4 @@ Things explicitly out of scope:
 
 ---
 
-_Last updated: 2026-03-16_
+_Last updated: 2026-03-17_
