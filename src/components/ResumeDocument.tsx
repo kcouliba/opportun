@@ -167,7 +167,7 @@ function parseDescription(text: string): { type: "bullet" | "paragraph"; text: s
     }
 
     // Check if line starts with a bullet marker
-    const bulletMatch = trimmed.match(/^[\-\*\u2022\u2023\u25E6\u25AA\u25CF]\s*(.*)/);
+    const bulletMatch = trimmed.match(/^[-*\u2022\u2023\u25E6\u25AA\u25CF]\s*(.*)/);
     if (bulletMatch) {
       flushParagraph();
       result.push({ type: "bullet", text: bulletMatch[1].trim() });

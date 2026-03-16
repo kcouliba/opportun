@@ -206,10 +206,8 @@ pub async fn check_watch_source(
                 row.get::<_, String>("listingUrl")
             })
             .map_err(|e| e.to_string())?;
-        for r in rows {
-            if let Ok(u) = r {
-                existing_urls.insert(u);
-            }
+        for u in rows.flatten() {
+            existing_urls.insert(u);
         }
     }
 
@@ -225,10 +223,8 @@ pub async fn check_watch_source(
                 row.get::<_, String>("sourceUrl")
             })
             .map_err(|e| e.to_string())?;
-        for r in rows {
-            if let Ok(u) = r {
-                existing_urls.insert(u);
-            }
+        for u in rows.flatten() {
+            existing_urls.insert(u);
         }
     }
 

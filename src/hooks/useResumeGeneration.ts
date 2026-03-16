@@ -43,7 +43,6 @@ export function useResumeGeneration() {
         missions,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blob = await pdf(createElement(ResumeDocument, { data }) as any).toBlob();
 
       const filePath = await save({

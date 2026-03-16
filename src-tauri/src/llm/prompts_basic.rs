@@ -1,7 +1,6 @@
-/// Simplified prompt variants for Basic-tier models (< 4B params).
-///
-/// These use fewer output fields, flatter schemas, and concrete examples
-/// to help small models produce valid JSON reliably.
+// Simplified prompt variants for Basic-tier models (< 4B params).
+// These use fewer output fields, flatter schemas, and concrete examples
+// to help small models produce valid JSON reliably.
 
 // ── Job Parsing (simplified schema) ─────────────────────────────────────────
 
