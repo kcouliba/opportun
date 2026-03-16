@@ -50,6 +50,7 @@ export default function LeadsPage() {
   const { showToast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"list" | "kanban">(
@@ -65,7 +66,6 @@ export default function LeadsPage() {
   }, [filter, debouncedSearch, viewMode]);
 
   const fetchLeads = useCallback(async (query: string) => {
-    setLoading(true);
     try {
       const filters: Record<string, string> = {};
       if (query) filters.q = query;
@@ -75,6 +75,7 @@ export default function LeadsPage() {
       // Keep existing leads on error
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   }, []);
 
@@ -164,7 +165,7 @@ export default function LeadsPage() {
     }
   };
 
-  if (loading) {
+  if (initialLoad) {
     return <PageLoader />;
   }
 
