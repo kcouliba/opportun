@@ -435,7 +435,31 @@ function LeadCard({
   selected?: boolean;
   onToggle?: (id: string) => void;
 }) {
+  const { showToast } = useToast();
   const stage = stageLabels[lead.stage] || stageLabels.lead;
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [actType, setActType] = useState("note");
+  const [actTitle, setActTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actTitle.trim()) return;
+    setSaving(true);
+    try {
+      await invoke("create_activity", {
+        leadId: lead.id,
+        data: { type: actType, title: actTitle.trim() },
+      });
+      showToast("Activity added", "success");
+      setActTitle("");
+      setShowQuickAdd(false);
+    } catch {
+      showToast("Failed to add activity", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="flex items-center gap-3">
@@ -448,35 +472,90 @@ function LeadCard({
           className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 shrink-0"
         />
       )}
-      <Link
-        to={`/leads/${lead.id}`}
-        className="block flex-1 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
-      >
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold">{lead.title}</h3>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${stage.color}`}>
-                {stage.label}
-              </span>
+      <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+        <div className="flex items-center">
+          <Link
+            to={`/leads/${lead.id}`}
+            className="flex-1 p-4"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold">{lead.title}</h3>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${stage.color}`}>
+                    {stage.label}
+                  </span>
+                </div>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
+                <p className="text-gray-500 text-xs mt-1">
+                  via {lead.source} • {new Date(lead.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="text-right">
+                {lead.offeredRate && (
+                  <p className="font-semibold">{lead.offeredRate}€/day</p>
+                )}
+                {lead.matchScore !== null && (
+                  <p className={`text-sm ${lead.matchScore >= 70 ? "text-green-600" : lead.matchScore >= 40 ? "text-yellow-600" : "text-red-600"}`}>
+                    {lead.matchScore}% match
+                  </p>
+                )}
+              </div>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
-            <p className="text-gray-500 text-xs mt-1">
-              via {lead.source} • {new Date(lead.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-          <div className="text-right">
-            {lead.offeredRate && (
-              <p className="font-semibold">{lead.offeredRate}€/day</p>
-            )}
-            {lead.matchScore !== null && (
-              <p className={`text-sm ${lead.matchScore >= 70 ? "text-green-600" : lead.matchScore >= 40 ? "text-yellow-600" : "text-red-600"}`}>
-                {lead.matchScore}% match
-              </p>
-            )}
-          </div>
+          </Link>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowQuickAdd(!showQuickAdd);
+            }}
+            title="Quick add activity"
+            className="px-3 py-2 mr-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
-      </Link>
+        {showQuickAdd && (
+          <form onSubmit={handleQuickAdd} className="px-4 pb-3 pt-1 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2">
+            <select
+              value={actType}
+              onChange={(e) => setActType(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+            >
+              <option value="note">Note</option>
+              <option value="call">Call</option>
+              <option value="email">Email</option>
+              <option value="meeting">Meeting</option>
+              <option value="interview">Interview</option>
+              <option value="follow_up">Follow-up</option>
+              <option value="other">Other</option>
+            </select>
+            <input
+              type="text"
+              value={actTitle}
+              onChange={(e) => setActTitle(e.target.value)}
+              placeholder="Activity title..."
+              autoFocus
+              className="flex-1 text-sm px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            />
+            <button
+              type="submit"
+              disabled={saving || !actTitle.trim()}
+              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "..." : "Add"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowQuickAdd(false)}
+              className="text-xs px-2 py-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              Cancel
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

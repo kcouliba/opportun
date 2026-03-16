@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import { useAiParse } from "@/hooks/useAiParse";
 import { useImport } from "@/hooks/useImport";
 import FileDropZone from "@/components/FileDropZone";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { toWslPath, validateFileExtension } from "@/lib/wslPath";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
 import type { ParsedJobDescription } from "@/types/index";
@@ -450,12 +450,10 @@ export default function QuickCapturePage() {
       <div className="max-w-md mx-auto">
         {/* Header */}
         <header className="mb-6">
-          <Link
-            to="/leads"
-            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
-          >
-            ← Back to Pipeline
-          </Link>
+          <Breadcrumbs items={[
+            { label: "Pipeline", to: "/leads" },
+            { label: "Quick Capture" },
+          ]} />
           <h1 className="text-xl font-bold">Quick Capture</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Capture now, details later

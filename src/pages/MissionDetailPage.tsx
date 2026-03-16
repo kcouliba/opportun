@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "@/components/Toast";
 import { PageLoader } from "@/components/LoadingSpinner";
 import { ErrorState } from "@/components/ErrorState";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import type { Mission } from "@/types/index";
 
 export default function MissionDetailPage() {
@@ -140,12 +141,11 @@ export default function MissionDetailPage() {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <header className="mb-8">
-          <Link
-            to="/missions"
-            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
-          >
-            ← Back to Missions
-          </Link>
+          <Breadcrumbs items={[
+            { label: "Missions", to: "/missions" },
+            { label: mission.client },
+            { label: mission.title },
+          ]} />
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-bold">{mission.title}</h1>
