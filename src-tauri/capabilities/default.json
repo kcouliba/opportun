@@ -12,6 +12,7 @@
     "dialog:allow-open",
     "fs:default",
     "fs:allow-write-text-file",
+    "fs:allow-write-file",
     "notification:default",
     "notification:allow-notify",
     "notification:allow-is-permission-granted",
