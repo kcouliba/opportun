@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import { ToastProvider } from "@/components/Toast";
 import { AiQueueProvider } from "@/components/AiQueue";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import CommandPalette from "@/components/CommandPalette";
 import { useStartupAlerts } from "@/hooks/useStartupAlerts";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
@@ -33,6 +34,7 @@ export default function App() {
     <ToastProvider>
       <AiQueueProvider>
         <StartupAlerts />
+        <CommandPalette />
         <div className="flex min-h-screen">
           <Navigation />
           <div className="flex-1 min-w-0 pb-16 md:pb-0 md:ml-16 lg:ml-55">

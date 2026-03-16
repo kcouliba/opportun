@@ -44,6 +44,7 @@ zstd = { version = "0.13", optional = true }
 base64 = { version = "0.22", optional = true }
 qrcode = { version = "0.14", optional = true }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+tauri-plugin-window-state = "2.4.1"
 
 [dev-dependencies]
 
