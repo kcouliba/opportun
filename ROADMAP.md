@@ -30,8 +30,8 @@
 - Dark mode, toast notifications
 
 **What's missing:**
-- No release automation (CI runs on push/PR)
-- Desktop features underutilized (no app menu)
+- No code signing (unsigned installers show OS warnings)
+- No auto-update (users download new versions manually)
 - No accessibility (0 aria labels)
 - Resume PDF layout needs polish
 
@@ -117,15 +117,16 @@ _Make daily use faster and more pleasant._
 
 ---
 
-## Phase 5 — Desktop & Distribution
+## Phase 5 — Desktop & Distribution ✓
 
 _Leverage Tauri properly — make it feel native and shippable._
 
 - [x] **Window state persistence** — tauri-plugin-window-state saves/restores size and position automatically
 - [x] **Keyboard shortcuts** — Ctrl+K command palette (search + navigate), Ctrl+N new lead, Ctrl+Shift+N quick capture
-- [ ] **App menu** — File (New Lead, Export), Edit (Undo), View (Dark mode toggle), Help (About, Docs)
-- [ ] **Auto-update** — Tauri updater plugin for self-updating from GitHub releases
-- [ ] **Release workflow** — GitHub Actions to build + publish installers (Linux .deb/.AppImage, macOS .dmg, Windows .msi)
+- [x] **Release workflow** — GitHub Actions builds cross-platform installers on tag push (Linux .deb/.AppImage, macOS .dmg, Windows .msi/.exe). Version bump script (`npm run release <version>`)
+- [x] **Auto-backup before migrations** — timestamped backup created automatically before schema upgrades, stored in app data directory
+- [ ] **App menu** — deprioritized (sidebar covers navigation)
+- [ ] **Auto-update** — deferred until code signing is set up (Tauri updater plugin)
 
 ---
 
@@ -164,4 +165,4 @@ Things explicitly out of scope:
 
 ---
 
-_Last updated: 2026-03-17_
+_Last updated: 2026-03-18_
