@@ -397,6 +397,7 @@ pub struct AnalyticsResponse {
     pub avg_time_in_stage: std::collections::HashMap<String, Option<i64>>,
     pub total_pipeline_value: i64,
     pub source_breakdown: Vec<SourceCount>,
+    pub source_analytics: Vec<SourceAnalytics>,
     pub avg_match_score_by_stage: std::collections::HashMap<String, Option<i64>>,
     pub monthly_lead_count: Vec<MonthlyCount>,
     pub stage_counts: StageCounts,
@@ -415,6 +416,20 @@ pub struct ConversionRates {
 pub struct SourceCount {
     pub source: String,
     pub count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceAnalytics {
+    pub source: String,
+    pub total: usize,
+    pub won: usize,
+    pub lost: usize,
+    pub active: usize,
+    pub conversion_rate: f64,
+    pub avg_match_score: Option<i64>,
+    pub avg_offered_rate: Option<i64>,
+    pub avg_days_to_win: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]

@@ -135,10 +135,23 @@ export interface AnalyticsData {
   avgTimeInStage: Record<string, number | null>;
   totalPipelineValue: number;
   sourceBreakdown: { source: string; count: number }[];
+  sourceAnalytics: SourceAnalytics[];
   avgMatchScoreByStage: Record<string, number | null>;
   monthlyLeadCount: { month: string; count: number }[];
   stageCounts: Record<string, number>;
   totalLeads: number;
+}
+
+export interface SourceAnalytics {
+  source: string;
+  total: number;
+  won: number;
+  lost: number;
+  active: number;
+  conversionRate: number;
+  avgMatchScore: number | null;
+  avgOfferedRate: number | null;
+  avgDaysToWin: number | null;
 }
 
 export interface DashboardData {

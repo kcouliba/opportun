@@ -132,10 +132,67 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
+        {/* Source Performance */}
+        {data.sourceAnalytics.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold mb-4">{t("analytics.sourceAnalytics")}</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                      <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">{t("leadDetail.source")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.totalLeads")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.won")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.lost")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.active")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.conversionRate")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.avgScore")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.avgRate")}</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-600 dark:text-gray-400">{t("analytics.daysToWin")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.sourceAnalytics.map((src) => (
+                      <tr key={src.source} className="border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                        <td className="px-4 py-3 font-medium capitalize">{src.source}</td>
+                        <td className="text-center px-3 py-3">{src.total}</td>
+                        <td className="text-center px-3 py-3 text-green-600">{src.won || "-"}</td>
+                        <td className="text-center px-3 py-3 text-red-600">{src.lost || "-"}</td>
+                        <td className="text-center px-3 py-3">{src.active || "-"}</td>
+                        <td className="text-center px-3 py-3">
+                          {src.won + src.lost > 0 ? (
+                            <span className={src.conversionRate >= 50 ? "text-green-600 font-medium" : src.conversionRate >= 25 ? "text-yellow-600" : "text-gray-500"}>
+                              {src.conversionRate}%
+                            </span>
+                          ) : "-"}
+                        </td>
+                        <td className="text-center px-3 py-3">
+                          {src.avgMatchScore !== null ? (
+                            <span className={src.avgMatchScore >= 70 ? "text-green-600" : src.avgMatchScore >= 40 ? "text-yellow-600" : "text-red-600"}>
+                              {src.avgMatchScore}%
+                            </span>
+                          ) : "-"}
+                        </td>
+                        <td className="text-center px-3 py-3">
+                          {src.avgOfferedRate !== null ? `${src.avgOfferedRate}€` : "-"}
+                        </td>
+                        <td className="text-center px-3 py-3">
+                          {src.avgDaysToWin !== null ? `${src.avgDaysToWin}d` : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
         <div className="grid md:grid-cols-2 gap-8">
           {/* Average Time in Stage */}
           <section>
-            <h2 className="text-lg font-semibold mb-4">Average Time in Stage</h2>
+            <h2 className="text-lg font-semibold mb-4">{t("analytics.avgTimeInStage")}</h2>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <div className="space-y-3">
                 {Object.entries(data.avgTimeInStage).map(([stage, days]) => (
@@ -154,7 +211,7 @@ export default function AnalyticsPage() {
 
           {/* Average Match Score by Stage */}
           <section>
-            <h2 className="text-lg font-semibold mb-4">Avg Match Score by Stage</h2>
+            <h2 className="text-lg font-semibold mb-4">{t("analytics.avgScoreByStage")}</h2>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <div className="space-y-3">
                 {Object.entries(data.avgMatchScoreByStage).map(([stage, score]) => (

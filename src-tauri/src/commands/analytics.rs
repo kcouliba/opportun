@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::models::{
-    AnalyticsResponse, ConversionRates, Lead, MonthlyCount, SourceCount, StageCounts,
+    AnalyticsResponse, ConversionRates, Lead, MonthlyCount, SourceAnalytics, SourceCount,
+    StageCounts,
 };
 use chrono::{Datelike, Months, Utc};
 use std::collections::HashMap;
@@ -253,6 +254,89 @@ pub fn get_analytics(db: State<Database>) -> Result<AnalyticsResponse, String> {
         .collect();
     source_breakdown.sort_by(|a, b| b.count.cmp(&a.count));
 
+    // Per-source analytics
+    let mut source_data: HashMap<String, Vec<&Lead>> = HashMap::new();
+    for lead in &leads {
+        source_data.entry(lead.source.clone()).or_default().push(lead);
+    }
+
+    let mut source_analytics: Vec<SourceAnalytics> = source_data
+        .into_iter()
+        .map(|(source, src_leads)| {
+            let total = src_leads.len();
+            let won = src_leads.iter().filter(|l| l.stage == "won").count();
+            let lost = src_leads.iter().filter(|l| l.stage == "lost").count();
+            let active = total - won - lost;
+
+            let completed = won + lost;
+            let conversion_rate = if completed > 0 {
+                round1((won as f64 / completed as f64) * 100.0)
+            } else {
+                0.0
+            };
+
+            let scores: Vec<i64> = src_leads
+                .iter()
+                .filter_map(|l| l.match_score)
+                .collect();
+            let avg_match_score = if scores.is_empty() {
+                None
+            } else {
+                Some((scores.iter().sum::<i64>() as f64 / scores.len() as f64).round() as i64)
+            };
+
+            let rates: Vec<i64> = src_leads
+                .iter()
+                .filter_map(|l| l.offered_rate)
+                .filter(|r| *r > 0)
+                .collect();
+            let avg_offered_rate = if rates.is_empty() {
+                None
+            } else {
+                Some((rates.iter().sum::<i64>() as f64 / rates.len() as f64).round() as i64)
+            };
+
+            // Average days from creation to "won" stage
+            let won_days: Vec<i64> = src_leads
+                .iter()
+                .filter(|l| l.stage == "won")
+                .filter_map(|l| {
+                    let created = chrono::DateTime::parse_from_rfc3339(&l.created_at)
+                        .or_else(|_| {
+                            chrono::NaiveDateTime::parse_from_str(&l.created_at, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| dt.and_utc().fixed_offset())
+                        })
+                        .ok()?;
+                    let updated = chrono::DateTime::parse_from_rfc3339(&l.updated_at)
+                        .or_else(|_| {
+                            chrono::NaiveDateTime::parse_from_str(&l.updated_at, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| dt.and_utc().fixed_offset())
+                        })
+                        .ok()?;
+                    Some((updated - created).num_days())
+                })
+                .collect();
+            let avg_days_to_win = if won_days.is_empty() {
+                None
+            } else {
+                Some((won_days.iter().sum::<i64>() as f64 / won_days.len() as f64).round() as i64)
+            };
+
+            SourceAnalytics {
+                source,
+                total,
+                won,
+                lost,
+                active,
+                conversion_rate,
+                avg_match_score,
+                avg_offered_rate,
+                avg_days_to_win,
+            }
+        })
+        .collect();
+    source_analytics.sort_by(|a, b| b.total.cmp(&a.total));
+
     Ok(AnalyticsResponse {
         conversion_rates: ConversionRates {
             lead_to_qualified: round1(lead_to_qualified),
@@ -263,6 +347,7 @@ pub fn get_analytics(db: State<Database>) -> Result<AnalyticsResponse, String> {
         avg_time_in_stage,
         total_pipeline_value,
         source_breakdown,
+        source_analytics,
         avg_match_score_by_stage,
         monthly_lead_count,
         stage_counts,
