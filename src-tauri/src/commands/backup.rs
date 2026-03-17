@@ -1,4 +1,5 @@
 use crate::db::Database;
+use std::collections::HashSet;
 use tauri::State;
 
 #[tauri::command]
@@ -61,40 +62,76 @@ pub fn restore_database(
         .map_err(|e| format!("Cannot write temp file: {}", e))?;
 
     let result = (|| {
-        let src = rusqlite::Connection::open(&tmp)
+        let _src = rusqlite::Connection::open(&tmp)
             .map_err(|e| format!("Cannot open backup: {}", e))?;
-        src.busy_timeout(std::time::Duration::from_secs(10))
-            .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
 
-        // Attach source DB and copy all tables via SQL instead of backup API
+        // Attach source DB and copy tables via SQL
         let tmp_escaped = tmp.to_str().unwrap_or("").replace('\'', "''");
         conn.execute_batch("DETACH DATABASE IF EXISTS restore_src;").ok();
         conn.execute_batch(&format!(
             "ATTACH DATABASE '{}' AS restore_src;", tmp_escaped
         )).map_err(|e| format!("Attach failed: {}", e))?;
 
-        // Get list of tables from source
-        let mut stmt = conn.prepare(
-            "SELECT name FROM restore_src.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        ).map_err(|e| format!("Failed to list tables: {}", e))?;
+        // Helper to query a list of strings from a SQL statement
+        fn query_strings(conn: &rusqlite::Connection, sql: &str, col: usize) -> Result<HashSet<String>, String> {
+            let mut stmt = conn.prepare(sql).map_err(|e| format!("Prepare failed: {}", e))?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(col))
+                .map_err(|e| format!("Query failed: {}", e))?;
+            let result: HashSet<String> = rows.filter_map(|r| r.ok()).collect();
+            Ok(result)
+        }
 
-        let tables: Vec<String> = stmt.query_map([], |row| row.get(0))
-            .map_err(|e| format!("Failed to query tables: {}", e))?
-            .filter_map(|r| r.ok())
-            .collect();
-        drop(stmt);
+        // Get tables that exist in BOTH source and destination
+        let src_tables = query_strings(&conn,
+            "SELECT name FROM restore_src.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", 0)?;
+        let dest_tables = query_strings(&conn,
+            "SELECT name FROM main.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", 0)?;
 
-        // Delete existing data and copy from source, table by table
-        for table in &tables {
-            conn.execute(&format!("DELETE FROM \"{}\"", table), [])
+        let common_tables: Vec<&String> = src_tables.intersection(&dest_tables).collect();
+
+        // For each common table, find shared columns and copy data
+        for table in &common_tables {
+            let src_cols = query_strings(&conn,
+                &format!("PRAGMA restore_src.table_info(\"{}\")", table), 1)?;
+            let dest_cols = query_strings(&conn,
+                &format!("PRAGMA main.table_info(\"{}\")", table), 1)?;
+
+            // Only copy columns that exist in both
+            let shared_cols: Vec<&String> = src_cols.intersection(&dest_cols).collect();
+            if shared_cols.is_empty() {
+                continue;
+            }
+
+            let col_list = shared_cols.iter()
+                .map(|c| format!("\"{}\"", c))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            conn.execute(&format!("DELETE FROM main.\"{}\"", table), [])
                 .map_err(|e| format!("Failed to clear table '{}': {}", table, e))?;
             conn.execute_batch(&format!(
-                "INSERT INTO \"{}\" SELECT * FROM restore_src.\"{}\"", table, table
+                "INSERT INTO main.\"{}\" ({}) SELECT {} FROM restore_src.\"{}\"",
+                table, col_list, col_list, table
             )).map_err(|e| format!("Failed to copy table '{}': {}", table, e))?;
+
+            log::info!("[Restore] Copied table '{}' ({} columns)", table, shared_cols.len());
         }
 
         conn.execute_batch("DETACH DATABASE restore_src;")
             .map_err(|e| format!("Detach failed: {}", e))?;
+
+        // Re-create singleton rows that may be missing from older backups
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO aiSettings (id) VALUES ('singleton');
+             INSERT OR IGNORE INTO appSettings (id) VALUES ('singleton');"
+        ).map_err(|e| format!("Failed to restore singleton rows: {}", e))?;
+
+        // Re-run migrations to bring schema up to date
+        // (adds any columns/tables the backup didn't have)
+        crate::db::Database::run_migrations(&conn)
+            .map_err(|e| format!("Post-restore migration failed: {}", e))?;
+
+        log::info!("[Restore] Complete — {} tables restored", common_tables.len());
 
         Ok(())
     })();

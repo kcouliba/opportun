@@ -46,7 +46,7 @@ impl Database {
             Self::auto_backup(&conn, &db_path, current_version);
         }
 
-        Self::migrate(&conn)?;
+        Self::run_migrations(&conn)?;
 
         Ok(Database {
             conn: Mutex::new(conn),
@@ -76,7 +76,7 @@ impl Database {
         }
     }
 
-    fn migrate(conn: &Connection) -> Result<()> {
+    pub fn run_migrations(conn: &Connection) -> Result<()> {
         let current_version: u32 =
             conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
 
@@ -97,7 +97,7 @@ impl Database {
     pub fn in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;
-        Self::migrate(&conn)?;
+        Self::run_migrations(&conn)?;
         Ok(Database {
             conn: Mutex::new(conn),
         })
@@ -130,6 +130,6 @@ mod tests {
         let db = Database::in_memory().expect("first init");
         let conn = db.conn.lock().unwrap();
         // Running migrate again should not fail
-        Database::migrate(&conn).expect("second migrate should succeed");
+        Database::run_migrations(&conn).expect("second migrate should succeed");
     }
 }
