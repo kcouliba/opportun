@@ -29,7 +29,7 @@ impl Database {
     pub fn new(app_data_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&app_data_dir).ok();
         let db_path = app_data_dir.join("opportun.db");
-        let conn = Connection::open(db_path)?;
+        let conn = Connection::open(&db_path)?;
 
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
@@ -37,11 +37,43 @@ impl Database {
              PRAGMA busy_timeout=5000;",
         )?;
 
+        // Auto-backup before running new migrations
+        let current_version: u32 =
+            conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        let target_version = MIGRATIONS.len() as u32;
+
+        if current_version > 0 && current_version < target_version {
+            Self::auto_backup(&conn, &db_path, current_version);
+        }
+
         Self::migrate(&conn)?;
 
         Ok(Database {
             conn: Mutex::new(conn),
         })
+    }
+
+    /// Create a timestamped backup before running migrations.
+    /// Best-effort: if it fails, log and continue (don't block startup).
+    fn auto_backup(conn: &Connection, db_path: &std::path::Path, from_version: u32) {
+        let backup_dir = db_path.parent().unwrap_or(std::path::Path::new("."));
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let backup_name = format!("opportun_pre_migration_v{}_{}.db", from_version, timestamp);
+        let backup_path = backup_dir.join(&backup_name);
+
+        let dest = backup_path.to_str().unwrap_or("").replace('\'', "''");
+        match conn.execute(&format!("VACUUM INTO '{}'", dest), []) {
+            Ok(_) => log::info!(
+                "[DB] Auto-backup created before migration v{} → v{}: {}",
+                from_version,
+                MIGRATIONS.len(),
+                backup_name
+            ),
+            Err(e) => log::warn!(
+                "[DB] Auto-backup failed (continuing anyway): {}",
+                e
+            ),
+        }
     }
 
     fn migrate(conn: &Connection) -> Result<()> {
