@@ -4,6 +4,10 @@ use tauri::State;
 #[tauri::command]
 pub fn backup_database(db: State<Database>, dest_path: String) -> Result<(), String> {
     let conn = db.conn.lock().unwrap();
+    conn.busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
+    conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);")
+        .map_err(|e| format!("WAL checkpoint failed: {}", e))?;
     conn.execute(&format!("VACUUM INTO '{}'", dest_path.replace('\'', "''")), [])
         .map_err(|e| format!("Backup failed: {}", e))?;
     Ok(())
