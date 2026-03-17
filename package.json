@@ -18,7 +18,8 @@
     "audit": "npm audit && cargo audit --file src-tauri/Cargo.lock",
     "tauri": "tauri",
     "mcp": "tsx src/mcp/server.ts",
-    "mcp:http": "tsx src/mcp/server.ts --http"
+    "mcp:http": "tsx src/mcp/server.ts --http",
+    "release": "bash scripts/bump-version.sh"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
