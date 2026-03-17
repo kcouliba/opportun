@@ -603,6 +603,7 @@
     "never": "never",
     "found": "{{count}} found",
     "check": "Check",
+    "checkAll": "Check All",
     "checking": "Checking...",
     "newLeads": "new leads",
     "dismiss": "Dismiss",

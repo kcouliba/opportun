@@ -6,6 +6,7 @@ import { AiQueueProvider } from "@/components/AiQueue";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import CommandPalette from "@/components/CommandPalette";
 import { useStartupAlerts } from "@/hooks/useStartupAlerts";
+import { SourceCheckerProvider } from "@/hooks/useSourceChecker";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
 import NewLeadPage from "@/pages/NewLeadPage";
@@ -33,6 +34,7 @@ export default function App() {
   return (
     <ToastProvider>
       <AiQueueProvider>
+        <SourceCheckerProvider>
         <StartupAlerts />
         <CommandPalette />
         <div className="flex min-h-screen">
@@ -55,6 +57,7 @@ export default function App() {
             </Routes>
           </div>
         </div>
+        </SourceCheckerProvider>
       </AiQueueProvider>
     </ToastProvider>
   );

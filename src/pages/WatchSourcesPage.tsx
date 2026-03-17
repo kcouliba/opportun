@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/Toast";
+import { useSourceChecker } from "@/hooks/useSourceChecker";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface WatchSource {
@@ -43,7 +44,7 @@ export default function WatchSourcesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
-  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const { running: checkingAll, currentSourceId: checkingId, checkAll, checkOne } = useSourceChecker();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Discovered leads state
@@ -140,27 +141,22 @@ export default function WatchSourcesPage() {
     }
   };
 
-  // Check source (AI discovery)
-  const handleCheck = async (id: string) => {
-    setCheckingId(id);
-    try {
-      const newLeads = await invoke<DiscoveredLead[]>("check_watch_source", {
-        sourceId: id,
-      });
-      showToast(
-        newLeads.length > 0
-          ? t("watchSources.found", { count: newLeads.length })
-          : t("common.noResults"),
-        newLeads.length > 0 ? "success" : "info",
-      );
-      setSelectedSourceId(id);
-      await loadSources();
-      await loadLeads(id);
-    } catch (e) {
-      showToast(t("watchSources.checkFailed", { error: e }), "error");
-    }
-    setCheckingId(null);
+  // Check source (AI discovery) — runs in background context
+  const handleCheck = (id: string) => {
+    checkOne(id);
   };
+
+  const handleCheckAll = () => {
+    checkAll(sources.map((s) => s.id));
+  };
+
+  // Refresh data when background check finishes
+  useEffect(() => {
+    if (!checkingAll && !checkingId) {
+      loadSources();
+      if (selectedSourceId) loadLeads(selectedSourceId);
+    }
+  }, [checkingAll, checkingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Selection helpers
   const toggleSelect = (id: string) => {
@@ -255,12 +251,23 @@ export default function WatchSourcesPage() {
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 {t("watchSources.title")}
               </h2>
-              <button
-                onClick={() => setShowAddForm(!showAddForm)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {showAddForm ? t("common.cancel") : `+ ${t("common.add")}`}
-              </button>
+              <div className="flex items-center gap-2">
+                {sources.length > 0 && (
+                  <button
+                    onClick={handleCheckAll}
+                    disabled={checkingAll || !!checkingId}
+                    className="text-sm text-green-600 hover:text-green-700 font-medium disabled:opacity-50"
+                  >
+                    {checkingAll ? t("watchSources.checking") : t("watchSources.checkAll")}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {showAddForm ? t("common.cancel") : `+ ${t("common.add")}`}
+                </button>
+              </div>
             </div>
 
             {/* Add form */}
