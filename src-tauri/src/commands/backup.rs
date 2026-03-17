@@ -41,11 +41,18 @@ pub fn restore_database(
 ) -> Result<(), String> {
     let mut conn = db.conn.lock().unwrap();
 
+    // Flush WAL to release any active readers, then set a busy timeout
+    // so the backup retries on transient locks instead of failing immediately
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+        .map_err(|e| format!("WAL checkpoint failed: {}", e))?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
+
     // Open source database
     let src = rusqlite::Connection::open(&source_path)
         .map_err(|e| format!("Cannot open backup: {}", e))?;
 
-    // Use SQLite backup API to copy source → current DB (no file lock issues)
+    // Use SQLite backup API to copy source → current DB
     let backup = rusqlite::backup::Backup::new(&src, &mut conn)
         .map_err(|e| format!("Backup init failed: {}", e))?;
     backup
