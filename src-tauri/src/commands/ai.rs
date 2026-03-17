@@ -108,8 +108,14 @@ pub fn update_ai_settings(
     llm: tauri::State<'_, LlmState>,
     data: AiSettingsInput,
 ) -> Result<AiSettings, String> {
-    log::info!("[AI] update_ai_settings called (provider={:?}, model={:?})", data.provider, data.model_name);
+    log::info!("[AI] update_ai_settings called (enabled={:?}, provider={:?}, model={:?})", data.enabled, data.provider, data.model_name);
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Ensure the singleton row exists (may be missing after a backup restore)
+    conn.execute(
+        "INSERT OR IGNORE INTO aiSettings (id) VALUES ('singleton')",
+        [],
+    ).map_err(|e| e.to_string())?;
 
     // Build dynamic update
     let mut updates = Vec::new();
@@ -149,9 +155,13 @@ pub fn update_ai_settings(
             "UPDATE aiSettings SET {} WHERE id = 'singleton'",
             updates.join(", ")
         );
+        log::info!("[AI] update_ai_settings SQL: {} ({} params)", sql, params.len());
         let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        conn.execute(&sql, param_refs.as_slice())
+        let rows = conn.execute(&sql, param_refs.as_slice())
             .map_err(|e| e.to_string())?;
+        log::info!("[AI] update_ai_settings affected {} rows", rows);
+    } else {
+        log::warn!("[AI] update_ai_settings: no fields to update!");
     }
 
     drop(conn);
