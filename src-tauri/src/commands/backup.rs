@@ -39,27 +39,64 @@ pub fn restore_database(
     db: State<Database>,
     source_path: String,
 ) -> Result<(), String> {
-    let mut conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().unwrap();
 
-    // Flush WAL to release any active readers, then set a busy timeout
-    // so the backup retries on transient locks instead of failing immediately
-    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
-        .map_err(|e| format!("WAL checkpoint failed: {}", e))?;
-    conn.busy_timeout(std::time::Duration::from_secs(5))
+    // Set busy timeout so SQLite retries on transient WAL locks
+    conn.busy_timeout(std::time::Duration::from_secs(10))
         .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
 
-    // Open source database
-    let src = rusqlite::Connection::open(&source_path)
-        .map_err(|e| format!("Cannot open backup: {}", e))?;
+    // Read the source file into memory and write it via SQL
+    // This avoids backup API lock issues by working within the existing connection
+    let src_data = std::fs::read(&source_path)
+        .map_err(|e| format!("Cannot read backup file: {}", e))?;
 
-    // Use SQLite backup API to copy source → current DB
-    let backup = rusqlite::backup::Backup::new(&src, &mut conn)
-        .map_err(|e| format!("Backup init failed: {}", e))?;
-    backup
-        .run_to_completion(5, std::time::Duration::from_millis(250), None)
-        .map_err(|e| format!("Restore failed: {}", e))?;
+    // Write to a temp file, then use VACUUM INTO in reverse:
+    // open source as a separate connection, use backup API from it
+    let tmp = std::env::temp_dir().join(format!("opportun_restore_{}.db", uuid::Uuid::new_v4()));
+    std::fs::write(&tmp, &src_data)
+        .map_err(|e| format!("Cannot write temp file: {}", e))?;
 
-    Ok(())
+    let result = (|| {
+        let src = rusqlite::Connection::open(&tmp)
+            .map_err(|e| format!("Cannot open backup: {}", e))?;
+        src.busy_timeout(std::time::Duration::from_secs(10))
+            .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
+
+        // Attach source DB and copy all tables via SQL instead of backup API
+        let tmp_escaped = tmp.to_str().unwrap_or("").replace('\'', "''");
+        conn.execute_batch("DETACH DATABASE IF EXISTS restore_src;").ok();
+        conn.execute_batch(&format!(
+            "ATTACH DATABASE '{}' AS restore_src;", tmp_escaped
+        )).map_err(|e| format!("Attach failed: {}", e))?;
+
+        // Get list of tables from source
+        let mut stmt = conn.prepare(
+            "SELECT name FROM restore_src.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).map_err(|e| format!("Failed to list tables: {}", e))?;
+
+        let tables: Vec<String> = stmt.query_map([], |row| row.get(0))
+            .map_err(|e| format!("Failed to query tables: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(stmt);
+
+        // Delete existing data and copy from source, table by table
+        for table in &tables {
+            conn.execute(&format!("DELETE FROM \"{}\"", table), [])
+                .map_err(|e| format!("Failed to clear table '{}': {}", table, e))?;
+            conn.execute_batch(&format!(
+                "INSERT INTO \"{}\" SELECT * FROM restore_src.\"{}\"", table, table
+            )).map_err(|e| format!("Failed to copy table '{}': {}", table, e))?;
+        }
+
+        conn.execute_batch("DETACH DATABASE restore_src;")
+            .map_err(|e| format!("Detach failed: {}", e))?;
+
+        Ok(())
+    })();
+
+    std::fs::remove_file(&tmp).ok();
+    result
 }
 
 #[cfg(test)]
