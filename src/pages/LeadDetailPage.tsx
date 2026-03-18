@@ -1278,8 +1278,8 @@ export default function LeadDetailPage() {
                   <button
                     onClick={async () => {
                       try {
-                        const updated = await invoke<Lead>("resync_lead_from_source", { leadId: id });
-                        setLead({ ...lead, ...updated, documents: lead.documents, activities: lead.activities });
+                        await invoke("resync_lead_from_source", { leadId: id });
+                        loadData();
                         showToast(t("leadDetail.resyncSuccess"), "success");
                       } catch (e) {
                         showToast(String(e), "error");

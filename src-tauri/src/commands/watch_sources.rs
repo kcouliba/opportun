@@ -714,7 +714,7 @@ pub fn resync_lead_from_source(
     // Find the discovered lead linked to this lead
     let discovered = conn
         .query_row(
-            "SELECT \"id\", \"title\", \"client\", \"location\", \"rate\", \"description\", \"listingUrl\"
+            "SELECT \"id\", \"title\", \"client\", \"location\", \"rate\", COALESCE(\"description\", \"snippet\") as \"description\", \"listingUrl\"
              FROM \"DiscoveredLead\" WHERE \"importedLeadId\" = ?1",
             rusqlite::params![lead_id],
             |row| {
@@ -732,6 +732,14 @@ pub fn resync_lead_from_source(
         .map_err(|_| "No source found for this lead. It may not have been imported from a watch source.".to_string())?;
 
     let (_disc_id, _disc_title, _disc_client, disc_location, disc_rate, disc_description, _disc_url) = discovered;
+
+    log::info!(
+        "[Resync] lead_id={}, desc={}, rate={:?}, location={:?}",
+        lead_id,
+        disc_description.as_deref().map(|d| d.len()).unwrap_or(0),
+        disc_rate,
+        disc_location,
+    );
 
     // Build update — only source-refreshable fields
     let now = chrono::Utc::now().to_rfc3339();
@@ -805,9 +813,11 @@ pub fn resync_lead_from_source(
         updates.join(", "),
         id_idx
     );
+    log::info!("[Resync] SQL: {} ({} params)", sql, params.len());
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, param_refs.as_slice())
+    let rows = conn.execute(&sql, param_refs.as_slice())
         .map_err(|e| format!("Resync failed: {}", e))?;
+    log::info!("[Resync] Updated {} rows", rows);
 
     // Return updated lead
     conn.query_row(
