@@ -181,20 +181,24 @@ async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
     let listings = parsed
         .hits
         .into_iter()
-        .map(|hit| ExtractedListing {
-            title: hit.title,
-            client: hit.client,
-            url: hit.source_url,
-            location: hit.location,
-            rate: hit.offered_rate,
-            snippet: hit.description.as_deref().map(|d| {
+        .map(|hit| {
+            let snippet = hit.description.as_deref().map(|d| {
                 if d.chars().count() > 200 {
                     let truncated: String = d.chars().take(200).collect();
                     format!("{}...", truncated)
                 } else {
                     d.to_string()
                 }
-            }),
+            });
+            ExtractedListing {
+                title: hit.title,
+                client: hit.client,
+                url: hit.source_url,
+                location: hit.location,
+                rate: hit.offered_rate,
+                snippet,
+                description: hit.description,
+            }
         })
         .collect();
 
@@ -318,11 +322,11 @@ pub async fn check_watch_source(
         let title = listing.title.clone().unwrap_or_else(|| "Unknown".to_string());
 
         conn.execute(
-            "INSERT INTO \"DiscoveredLead\" (\"id\", \"createdAt\", \"sourceId\", \"title\", \"client\", \"location\", \"rate\", \"snippet\", \"listingUrl\", \"status\")
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'new')",
+            "INSERT INTO \"DiscoveredLead\" (\"id\", \"createdAt\", \"sourceId\", \"title\", \"client\", \"location\", \"rate\", \"snippet\", \"description\", \"listingUrl\", \"status\")
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new')",
             rusqlite::params![
                 id, now, source_id, title, listing.client, listing.location,
-                listing.rate, listing.snippet, listing.url,
+                listing.rate, listing.snippet, listing.description, listing.url,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -336,6 +340,7 @@ pub async fn check_watch_source(
             location: listing.location.clone(),
             rate: listing.rate,
             snippet: listing.snippet.clone(),
+            description: listing.description.clone(),
             listing_url: listing.url.clone(),
             status: "new".to_string(),
             imported_lead_id: None,
@@ -393,6 +398,7 @@ pub fn list_discovered_leads(
                 location: row.get("location")?,
                 rate: row.get("rate")?,
                 snippet: row.get("snippet")?,
+                description: row.get("description").unwrap_or(None),
                 listing_url: row.get("listingUrl")?,
                 status: row.get("status")?,
                 imported_lead_id: row.get("importedLeadId")?,
@@ -466,7 +472,7 @@ pub async fn import_discovered_lead(
         let conn = db.conn.lock().unwrap();
         conn.query_row(
             "SELECT \"id\", \"createdAt\", \"sourceId\", \"title\", \"client\", \"location\",
-                    \"rate\", \"snippet\", \"listingUrl\", \"status\", \"importedLeadId\"
+                    \"rate\", \"snippet\", \"description\", \"listingUrl\", \"status\", \"importedLeadId\"
              FROM \"DiscoveredLead\" WHERE \"id\" = ?1",
             rusqlite::params![discovered_id],
             |row| {
@@ -479,6 +485,7 @@ pub async fn import_discovered_lead(
                     location: row.get("location")?,
                     rate: row.get("rate")?,
                     snippet: row.get("snippet")?,
+                    description: row.get("description").unwrap_or(None),
                     listing_url: row.get("listingUrl")?,
                     status: row.get("status")?,
                     imported_lead_id: row.get("importedLeadId")?,
@@ -488,8 +495,8 @@ pub async fn import_discovered_lead(
         .map_err(|_| "Discovered lead not found".to_string())?
     };
 
-    // 2. Get full description: fetch listing URL if available, else use snippet
-    let mut description = discovered.snippet.clone();
+    // 2. Get full description: prefer stored description, then snippet as fallback
+    let mut description = discovered.description.clone().or_else(|| discovered.snippet.clone());
     let mut parsed_title = discovered.title.clone();
     let mut parsed_client = discovered.client.clone();
     let mut parsed_location = discovered.location.clone();

@@ -525,6 +525,7 @@ pub struct DiscoveredLead {
     pub location: Option<String>,
     pub rate: Option<i64>,
     pub snippet: Option<String>,
+    pub description: Option<String>,
     pub listing_url: Option<String>,
     pub status: String,
     pub imported_lead_id: Option<String>,
@@ -539,6 +540,7 @@ pub struct ExtractedListing {
     #[serde(default, deserialize_with = "deserialize_optional_rate")]
     pub rate: Option<i64>,
     pub snippet: Option<String>,
+    pub description: Option<String>,
     pub url: Option<String>,
 }
 
