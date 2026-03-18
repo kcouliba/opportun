@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, cleanup } from "@testing-library/react";
 import { render } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { ToastProvider } from "@/components/Toast";
@@ -53,7 +53,10 @@ function renderLeadDetail() {
 
 describe("LeadDetailPage", () => {
   beforeEach(() => clearInvokeHandlers());
-  afterEach(() => clearInvokeHandlers());
+  afterEach(() => {
+    cleanup();
+    clearInvokeHandlers();
+  });
 
   it("renders lead details after loading", async () => {
     onInvoke("get_lead", () => mockLead);

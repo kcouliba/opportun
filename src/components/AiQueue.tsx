@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useRef,
+  useEffect,
   type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -41,8 +42,14 @@ export function AiQueueProvider({ children }: { children: ReactNode }) {
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
   const processingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const processNext = useCallback(() => {
+    if (!mountedRef.current) return;
     const queue = tasksRef.current;
     if (processingRef.current) return;
     const next = queue.find((t) => t.status === "pending");
@@ -58,13 +65,13 @@ export function AiQueueProvider({ children }: { children: ReactNode }) {
       .catch((err) => next.reject(err))
       .finally(() => {
         processingRef.current = false;
+        if (!mountedRef.current) return;
         setTasks((prev) => {
           const updated = prev.filter((t) => t.id !== next.id);
           tasksRef.current = updated;
           return updated;
         });
-        // Schedule next tick to avoid setState-in-render
-        setTimeout(() => processNext(), 0);
+        setTimeout(() => { if (mountedRef.current) processNext(); }, 0);
       });
   }, []);
 
