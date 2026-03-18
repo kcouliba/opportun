@@ -593,6 +593,8 @@
     "baseUrl": "Base URL",
     "baseUrlHint": "Override for OpenAI-compatible APIs (Azure, OpenRouter, Groq, etc.)",
     "pullModel": "Pull \"{{model}}\"",
+    "pullNewModel": "Pull",
+    "pullModelPlaceholder": "Model name to pull (e.g., llama3.2:3b)",
     "modelDownloaded": "Model downloaded successfully",
     "failedUpdateSettings": "Failed to update AI settings"
   },

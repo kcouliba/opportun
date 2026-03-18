@@ -593,6 +593,8 @@
     "baseUrl": "URL de base",
     "baseUrlHint": "Remplacement pour les API compatibles OpenAI (Azure, OpenRouter, Groq, etc.)",
     "pullModel": "Télécharger \"{{model}}\"",
+    "pullNewModel": "Télécharger",
+    "pullModelPlaceholder": "Nom du modèle (ex. llama3.2:3b)",
     "modelDownloaded": "Modèle téléchargé avec succès",
     "failedUpdateSettings": "Échec de la mise à jour des paramètres IA"
   },

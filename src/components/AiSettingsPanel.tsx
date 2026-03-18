@@ -32,6 +32,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
   const [pulling, setPulling] = useState(false);
   const [pullProgress, setPullProgress] = useState<DownloadProgress | null>(null);
   const [checking, setChecking] = useState(false);
+  const [pullModelName, setPullModelName] = useState("");
   const [showBaseUrl, setShowBaseUrl] = useState(false);
   const [embeddedAvailable, setEmbeddedAvailable] = useState(false);
 
@@ -183,6 +184,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
       await invoke("pull_ai_model", { modelName: settings.modelName });
       setPulling(false);
       setPullProgress(null);
+      setPullModelName("");
       showToast(t("ai.modelDownloaded"), "success");
       handleCheckStatus();
     } catch (e) {
@@ -384,51 +386,89 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
             </div>
           )}
 
-          {/* Model Name (Ollama, OpenAI, Anthropic — not Embedded) */}
+          {/* Model Selection */}
           {!isEmbedded && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t("ai.model")}
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={settings.modelName}
-                  onChange={(e) => handleModelChange(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={
-                    isOllama
-                      ? "e.g., llama3.2:3b"
-                      : provider === "openai"
-                        ? "e.g., gpt-4o-mini"
-                        : "e.g., claude-sonnet-4-5-20250514"
-                  }
-                />
-              </div>
-              {!isEmbedded && (
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {modelPresets.map((preset) => {
-                    const isSelected = settings.modelName === preset;
-                    const isLocal =
-                      isOllama && isModelInList(displayStatus?.localModels, preset);
-                    return (
-                      <button
-                        type="button"
-                        key={preset}
-                        onClick={() => handleModelChange(preset)}
-                        className={`text-xs px-2 py-0.5 rounded ${
-                          isSelected
-                            ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
-                            : isLocal
-                              ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50"
-                              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    );
-                  })}
+
+              {/* Ollama: dropdown of local models + pull new */}
+              {isOllama && displayStatus?.localModels && displayStatus.localModels.length > 0 ? (
+                <div className="space-y-2">
+                  <select
+                    value={settings.modelName}
+                    onChange={(e) => handleModelChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {!isModelInList(displayStatus.localModels, settings.modelName) && (
+                      <option value={settings.modelName}>{settings.modelName} ({t("ai.modelNotPulled", { model: "" }).trim()})</option>
+                    )}
+                    {displayStatus.localModels.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={pullModelName}
+                      onChange={(e) => setPullModelName(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={t("ai.pullModelPlaceholder")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (pullModelName.trim()) {
+                          handleModelChange(pullModelName.trim());
+                          handlePullModel();
+                        }
+                      }}
+                      disabled={pulling || !pullModelName.trim()}
+                      className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    >
+                      {pulling ? t("ai.downloading") : t("ai.pullNewModel")}
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  {/* Fallback: text input (Ollama with no local models, or API providers) */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={settings.modelName}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={
+                        isOllama
+                          ? "e.g., llama3.2:3b"
+                          : provider === "openai"
+                            ? "e.g., gpt-4o-mini"
+                            : "e.g., claude-sonnet-4-5-20250514"
+                      }
+                    />
+                  </div>
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {modelPresets.map((preset) => {
+                      const isSelected = settings.modelName === preset;
+                      return (
+                        <button
+                          type="button"
+                          key={preset}
+                          onClick={() => handleModelChange(preset)}
+                          className={`text-xs px-2 py-0.5 rounded ${
+                            isSelected
+                              ? "bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300"
+                              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -479,26 +519,14 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
             </div>
           )}
 
-          {/* Pull Model (Ollama only) */}
-          {isOllama && (
+          {/* Pull Progress (Ollama only) */}
+          {isOllama && pullProgress && (
             <div>
-              <button
-                type="button"
-                onClick={handlePullModel}
-                disabled={pulling || !settings.modelName}
-                className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-              >
-                {pulling ? t("ai.downloading") : t("ai.pullModel", { model: settings.modelName })}
-              </button>
-              {pullProgress && (
-                <div className="mt-2">
-                  <DownloadProgressBar
-                    status={pullProgress.status}
-                    completed={pullProgress.completed}
-                    total={pullProgress.total}
-                  />
-                </div>
-              )}
+              <DownloadProgressBar
+                status={pullProgress.status}
+                completed={pullProgress.completed}
+                total={pullProgress.total}
+              />
             </div>
           )}
         </>
