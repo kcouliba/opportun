@@ -10,7 +10,7 @@ interface ApiSettings {
   token: string;
 }
 
-export default function McpPanel() {
+export default function ApiPanel() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<ApiSettings | null>(null);
@@ -47,7 +47,7 @@ export default function McpPanel() {
 
   const handleRegenerate = async () => {
     try {
-      const newToken = await invoke<string>("regenerate_mcp_token");
+      const newToken = await invoke<string>("regenerate_api_token");
       setSettings((s) => s ? { ...s, token: newToken } : s);
       setRevealed(true);
       showToast(t("api.tokenRegenerated"), "success");

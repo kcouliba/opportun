@@ -185,8 +185,8 @@ pub fn run() {
             // Settings
             commands::settings::get_lead_sources,
             commands::settings::update_lead_sources,
-            commands::settings::get_mcp_token,
-            commands::settings::regenerate_mcp_token,
+            commands::settings::get_api_token,
+            commands::settings::regenerate_api_token,
             commands::settings::is_sync_available,
             commands::settings::get_api_settings,
             commands::settings::update_api_settings,

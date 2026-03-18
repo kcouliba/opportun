@@ -486,7 +486,6 @@
     "sourcesHint": "Manage the dropdown options for lead source",
     "sourcePlaceholder": "e.g., malt, welcometothejungle...",
     "aiSettings": "AI Settings",
-    "mcpIntegration": "MCP Integration",
     "apiIntegration": "API Integration",
     "apiEnable": "Enable HTTP API",
     "apiEnableHint": "External tools can connect to manage leads (requires app restart)",

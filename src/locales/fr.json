@@ -486,7 +486,6 @@
     "sourcesHint": "Gérer les options de la liste déroulante des sources",
     "sourcePlaceholder": "ex. malt, welcometothejungle...",
     "aiSettings": "Paramètres IA",
-    "mcpIntegration": "Intégration MCP",
     "apiIntegration": "Intégration API",
     "apiEnable": "Activer l'API HTTP",
     "apiEnableHint": "Les outils externes peuvent se connecter pour gérer les prospects (redémarrage requis)",

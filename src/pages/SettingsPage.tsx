@@ -4,7 +4,7 @@ import { save, open } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import AiSettingsPanel from "@/components/AiSettingsPanel";
-import McpPanel from "@/components/McpPanel";
+import ApiPanel from "@/components/ApiPanel";
 import SyncPanel from "@/components/SyncPanel";
 import { useLeadSources } from "@/hooks/useLeadSources";
 import { useToast } from "@/components/Toast";
@@ -124,7 +124,7 @@ export default function SettingsPage() {
 
           {/* API Integration */}
           <Section title={t("settings.apiIntegration")}>
-            <McpPanel />
+            <ApiPanel />
           </Section>
 
           {/* Sync (feature-flagged in backend) */}

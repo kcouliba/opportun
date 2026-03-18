@@ -8,7 +8,7 @@ fn generate_token() -> String {
 }
 
 #[tauri::command]
-pub fn get_mcp_token(db: tauri::State<'_, Database>) -> Result<String, String> {
+pub fn get_api_token(db: tauri::State<'_, Database>) -> Result<String, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let token: Option<String> = conn
         .query_row(
@@ -32,7 +32,7 @@ pub fn get_mcp_token(db: tauri::State<'_, Database>) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn regenerate_mcp_token(db: tauri::State<'_, Database>) -> Result<String, String> {
+pub fn regenerate_api_token(db: tauri::State<'_, Database>) -> Result<String, String> {
     let new_token = generate_token();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
