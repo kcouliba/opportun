@@ -526,20 +526,24 @@ pub async fn import_discovered_lead(
                         if let Ok(parsed) =
                             serde_json::from_str::<crate::models::ParsedJobDescription>(&cleaned)
                         {
-                            if let Some(t) = parsed.title {
-                                parsed_title = t;
+                            // AI enriches missing fields only — never overwrites existing data
+                            if parsed_title == discovered.title {
+                                if let Some(t) = parsed.title { parsed_title = t; }
                             }
-                            if let Some(c) = parsed.client {
-                                parsed_client = Some(c);
+                            if parsed_client.is_none() {
+                                if let Some(c) = parsed.client { parsed_client = Some(c); }
                             }
-                            if let Some(l) = parsed.location {
-                                parsed_location = Some(l);
+                            if parsed_location.is_none() {
+                                if let Some(l) = parsed.location { parsed_location = Some(l); }
                             }
-                            if parsed.rate.is_some() {
+                            if parsed_rate.is_none() && parsed.rate.is_some() {
                                 parsed_rate = parsed.rate;
                             }
-                            if let Some(ref d) = parsed.description {
-                                description = Some(d.clone());
+                            // Never overwrite description from adapter with AI summary
+                            if description.is_none() {
+                                if let Some(ref d) = parsed.description {
+                                    description = Some(d.clone());
+                                }
                             }
                             if let Some(ref techs) = parsed.technologies {
                                 if !techs.is_empty() {
@@ -553,7 +557,9 @@ pub async fn import_discovered_lead(
                                         Some(serde_json::to_string(doms).unwrap_or_default());
                                 }
                             }
-                            parsed_remote_policy = parsed.remote_policy;
+                            if parsed_remote_policy.is_none() {
+                                parsed_remote_policy = parsed.remote_policy;
+                            }
                             parsed_contact_name = parsed.contact_name;
                             parsed_contact_info = parsed.contact_info;
                         }
