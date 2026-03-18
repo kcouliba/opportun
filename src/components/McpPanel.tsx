@@ -89,17 +89,16 @@ export default function McpPanel() {
         </button>
         {showHelp && (
           <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs font-mono overflow-x-auto whitespace-pre">
-{`// MCP client config (e.g., Claude Desktop)
-{
-  "mcpServers": {
-    "opportun": {
-      "url": "http://127.0.0.1:3100/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-token>"
-      }
-    }
-  }
-}`}
+{`// REST API (embedded in the app, starts automatically)
+// Base URL: http://127.0.0.1:3100/api
+
+curl http://127.0.0.1:3100/api/leads \\
+  -H "Authorization: Bearer <your-token>"
+
+curl -X POST http://127.0.0.1:3100/api/leads \\
+  -H "Authorization: Bearer <your-token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"client":"Acme","title":"Dev Fullstack","source":"n8n"}'`}
           </pre>
         )}
       </div>

@@ -487,6 +487,7 @@
     "sourcePlaceholder": "e.g., malt, welcometothejungle...",
     "aiSettings": "AI Settings",
     "mcpIntegration": "MCP Integration",
+    "apiIntegration": "API Integration",
     "sync": "Sync",
     "data": "Data",
     "exportBackup": "Export Backup",

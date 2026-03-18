@@ -122,8 +122,8 @@ export default function SettingsPage() {
             <AiSettingsPanel />
           </Section>
 
-          {/* MCP Integration */}
-          <Section title={t("settings.mcpIntegration")}>
+          {/* API Integration */}
+          <Section title={t("settings.apiIntegration")}>
             <McpPanel />
           </Section>
 
