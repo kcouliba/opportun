@@ -592,6 +592,21 @@ export default function WatchSourcesPage() {
                                 </button>
                               </>
                             )}
+                            {lead.status === "dismissed" && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await invoke("undismiss_discovered_leads", { ids: [lead.id] });
+                                    await loadLeads(selectedSourceId);
+                                  } catch {
+                                    showToast(t("common.error"), "error");
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded transition-colors whitespace-nowrap"
+                              >
+                                {t("watchSources.restore")}
+                              </button>
+                            )}
                             {lead.status === "imported" && lead.importedLeadId && (
                               <Link
                                 to={`/leads/${lead.importedLeadId}`}

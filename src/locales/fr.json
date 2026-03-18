@@ -615,6 +615,7 @@
     "dismiss": "Ignorer",
     "importLead": "Importer",
     "importAll": "Tout importer",
+    "restore": "Restaurer",
     "sourceAdded": "Source ajoutée",
     "failedAddSource": "Échec de l'ajout de la source",
     "sourceUpdated": "Source mise à jour",

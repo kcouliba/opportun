@@ -615,6 +615,7 @@
     "dismiss": "Dismiss",
     "importLead": "Import",
     "importAll": "Import All",
+    "restore": "Restore",
     "sourceAdded": "Source added",
     "failedAddSource": "Failed to add source",
     "sourceUpdated": "Source updated",

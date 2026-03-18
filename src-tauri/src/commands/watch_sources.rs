@@ -417,6 +417,19 @@ pub fn dismiss_discovered_leads(db: State<Database>, ids: Vec<String>) -> Result
 }
 
 #[tauri::command]
+pub fn undismiss_discovered_leads(db: State<Database>, ids: Vec<String>) -> Result<(), String> {
+    let conn = db.conn.lock().unwrap();
+    for id in &ids {
+        conn.execute(
+            "UPDATE \"DiscoveredLead\" SET \"status\" = 'new' WHERE \"id\" = ?1 AND \"status\" = 'dismissed'",
+            rusqlite::params![id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn count_new_discovered_leads(db: State<Database>) -> Result<i64, String> {
     let conn = db.conn.lock().unwrap();
     conn.query_row(

@@ -179,6 +179,7 @@ pub fn run() {
             commands::watch_sources::check_watch_source,
             commands::watch_sources::list_discovered_leads,
             commands::watch_sources::dismiss_discovered_leads,
+            commands::watch_sources::undismiss_discovered_leads,
             commands::watch_sources::count_new_discovered_leads,
             commands::watch_sources::import_discovered_lead,
             commands::watch_sources::batch_import_discovered_leads,
