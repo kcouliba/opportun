@@ -208,7 +208,14 @@ pub async fn check_ai_status(llm: tauri::State<'_, LlmState>) -> Result<AiStatus
                 } else {
                     vec![]
                 };
-                let model_avail = models.iter().any(|m| m == &model_name);
+                // Match by exact name or by name without tag (e.g., "mistral:7b" matches "mistral:7b",
+                // "glm-4.7-flash" matches "glm-4.7-flash:latest")
+                let model_avail = models.iter().any(|m| {
+                    m == &model_name
+                        || m.starts_with(&format!("{}:", model_name))
+                        || model_name.starts_with(&format!("{}:", m.split(':').next().unwrap_or("")))
+                        || m.split(':').next() == model_name.split(':').next()
+                });
                 (avail, model_avail, models)
             }
         }

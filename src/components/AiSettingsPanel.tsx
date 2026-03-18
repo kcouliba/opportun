@@ -194,6 +194,16 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
 
   const displayStatus = controlled ? status : internalStatus;
 
+  // Fuzzy model name match: "glm-4.7-flash" matches "glm-4.7-flash:latest"
+  const isModelInList = (models: string[] | undefined, name: string): boolean => {
+    if (!models) return false;
+    const baseName = name.split(":")[0];
+    return models.some((m) => {
+      const mBase = m.split(":")[0];
+      return m === name || mBase === baseName;
+    });
+  };
+
   const modelPresets = isOllama
     ? OLLAMA_MODEL_PRESETS
     : provider === "openai"
@@ -293,7 +303,8 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
             {isOllama &&
               displayStatus?.available &&
               (() => {
-                const modelReady = displayStatus.localModels?.includes(
+                const modelReady = isModelInList(
+                  displayStatus.localModels,
                   settings.modelName,
                 );
                 return (
@@ -399,7 +410,7 @@ export default function AiSettingsPanel({ value, onChange }: AiSettingsPanelProp
                   {modelPresets.map((preset) => {
                     const isSelected = settings.modelName === preset;
                     const isLocal =
-                      isOllama && displayStatus?.localModels?.includes(preset);
+                      isOllama && isModelInList(displayStatus?.localModels, preset);
                     return (
                       <button
                         type="button"
