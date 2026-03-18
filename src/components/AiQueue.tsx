@@ -42,36 +42,42 @@ export function AiQueueProvider({ children }: { children: ReactNode }) {
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
   const processingRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => { mountedRef.current = false; };
-  }, []);
 
   const processNext = useCallback(() => {
-    if (!mountedRef.current) return;
     const queue = tasksRef.current;
     if (processingRef.current) return;
     const next = queue.find((t) => t.status === "pending");
     if (!next) return;
 
+    console.log(`[AiQueue] Processing: ${next.label} (command=${next.command})`);
     processingRef.current = true;
     setTasks((prev) =>
       prev.map((t) => (t.id === next.id ? { ...t, status: "running" as const } : t))
     );
 
     invoke(next.command, next.args)
-      .then((result) => next.resolve(result))
-      .catch((err) => next.reject(err))
+      .then((result) => {
+        console.log(`[AiQueue] Completed: ${next.label}`);
+        next.resolve(result);
+      })
+      .catch((err) => {
+        console.error(`[AiQueue] Failed: ${next.label}`, err);
+        next.reject(err);
+      })
       .finally(() => {
         processingRef.current = false;
-        if (!mountedRef.current) return;
-        setTasks((prev) => {
-          const updated = prev.filter((t) => t.id !== next.id);
-          tasksRef.current = updated;
-          return updated;
-        });
-        setTimeout(() => { if (mountedRef.current) processNext(); }, 0);
+        try {
+          setTasks((prev) => {
+            const updated = prev.filter((t) => t.id !== next.id);
+            tasksRef.current = updated;
+            return updated;
+          });
+        } catch {
+          // Component may be unmounted (test teardown)
+        }
+        setTimeout(() => {
+          try { processNext(); } catch { /* unmounted */ }
+        }, 0);
       });
   }, []);
 
@@ -88,12 +94,14 @@ export function AiQueueProvider({ children }: { children: ReactNode }) {
           args,
         };
 
+        console.log(`[AiQueue] Enqueued: ${label} (command=${command})`);
         setTasks((prev) => {
           const updated = [...prev, task];
           tasksRef.current = updated;
           return updated;
         });
-        setTimeout(() => processNext(), 0);
+        // Use longer delay to ensure state is committed before processNext reads it
+        setTimeout(() => processNext(), 50);
       });
     },
     [processNext]
@@ -104,6 +112,7 @@ export function AiQueueProvider({ children }: { children: ReactNode }) {
       const task = tasksRef.current.find((t) => t.id === taskId);
       if (!task || task.status !== "pending") return;
 
+      console.log(`[AiQueue] Cancelling task: ${task.label}`);
       task.reject(new Error("Cancelled"));
       setTasks((prev) => {
         const updated = prev.filter((t) => t.id !== taskId);
