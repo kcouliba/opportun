@@ -650,10 +650,11 @@ pub async fn analyze_lead_ai(
     lead_id: String,
     locale: Option<String>,
 ) -> Result<LeadAnalysis, LlmError> {
+    let cmd_start = std::time::Instant::now();
     log::info!("[AI] analyze_lead_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
-    log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+    log::info!("[AI] analyze_lead_ai: fetched lead '{}' and profile '{}' ({}ms)", lead.title, profile.name, cmd_start.elapsed().as_millis());
 
     let tier = detect_tier(&llm);
     let lang = resolve_content_language(&lead, &locale);
@@ -702,7 +703,7 @@ pub async fn analyze_lead_ai(
 
     match serde_json::from_str::<LeadAnalysis>(&cleaned) {
         Ok(analysis) => {
-            log::info!("[AI] analyze_lead_ai: parsed successfully — fit={}", analysis.overall_fit);
+            log::info!("[AI] analyze_lead_ai: parsed successfully — fit={} — total {}ms", analysis.overall_fit, cmd_start.elapsed().as_millis());
 
             // Persist analysis as a Document so it survives navigation
             let json_content = serde_json::to_string_pretty(&analysis)
@@ -725,10 +726,11 @@ pub async fn generate_cover_letter_ai(
     lead_id: String,
     locale: Option<String>,
 ) -> Result<Document, LlmError> {
+    let cmd_start = std::time::Instant::now();
     log::info!("[AI] generate_cover_letter_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
-    log::info!("[AI] generate_cover_letter_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+    log::info!("[AI] generate_cover_letter_ai: fetched lead '{}' and profile '{}' ({}ms)", lead.title, profile.name, cmd_start.elapsed().as_millis());
 
     let lang = resolve_content_language(&lead, &locale);
     let user_prompt = build_user_prompt(&profile, &lead, &missions);
@@ -759,7 +761,7 @@ pub async fn generate_cover_letter_ai(
 
     match save_document(&db, &lead_id, "cover_letter", &content) {
         Ok(doc) => {
-            log::info!("[AI] generate_cover_letter_ai: saved document id={}", doc.id);
+            log::info!("[AI] generate_cover_letter_ai: saved document id={} — total {}ms", doc.id, cmd_start.elapsed().as_millis());
             Ok(doc)
         }
         Err(e) => {
@@ -776,10 +778,11 @@ pub async fn generate_interview_prep_ai(
     lead_id: String,
     locale: Option<String>,
 ) -> Result<Document, LlmError> {
+    let cmd_start = std::time::Instant::now();
     log::info!("[AI] generate_interview_prep_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
-    log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+    log::info!("[AI] generate_interview_prep_ai: fetched lead '{}' and profile '{}' ({}ms)", lead.title, profile.name, cmd_start.elapsed().as_millis());
 
     let tier = detect_tier(&llm);
     let lang = resolve_content_language(&lead, &locale);
@@ -833,7 +836,7 @@ pub async fn generate_interview_prep_ai(
                 let markdown = format_interview_prep_as_markdown(&prep, &lead.client, &lead.title);
                 match save_document(&db, &lead_id, "interview_prep", &markdown) {
                     Ok(doc) => {
-                        log::info!("[AI] generate_interview_prep_ai: saved document id={}", doc.id);
+                        log::info!("[AI] generate_interview_prep_ai: saved document id={} — total {}ms", doc.id, cmd_start.elapsed().as_millis());
                         return Ok(doc);
                     }
                     Err(e) => {
@@ -1082,10 +1085,11 @@ pub async fn generate_application_message_ai(
     options: ApplicationMessageOptions,
     locale: Option<String>,
 ) -> Result<Document, LlmError> {
+    let cmd_start = std::time::Instant::now();
     log::info!("[AI] generate_application_message_ai called for lead_id={}", lead_id);
 
     let (lead, profile, missions) = fetch_lead_and_profile(&db, &lead_id)?;
-    log::info!("[AI] generate_application_message_ai: fetched lead '{}' and profile '{}'", lead.title, profile.name);
+    log::info!("[AI] generate_application_message_ai: fetched lead '{}' and profile '{}' ({}ms)", lead.title, profile.name, cmd_start.elapsed().as_millis());
 
     let lang = resolve_content_language(&lead, &locale);
     let mut user_prompt = build_user_prompt(&profile, &lead, &missions);
@@ -1139,7 +1143,7 @@ pub async fn generate_application_message_ai(
 
     match save_document(&db, &lead_id, "application_message", &content) {
         Ok(doc) => {
-            log::info!("[AI] generate_application_message_ai: saved document id={}", doc.id);
+            log::info!("[AI] generate_application_message_ai: saved document id={} — total {}ms", doc.id, cmd_start.elapsed().as_millis());
             Ok(doc)
         }
         Err(e) => {

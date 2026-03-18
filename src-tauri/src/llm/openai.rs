@@ -103,7 +103,7 @@ impl OpenAiProvider {
             model: model.to_string(),
             messages,
             temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            max_tokens: if request.max_tokens > 0 { request.max_tokens } else { 2048 },
             response_format,
         };
 

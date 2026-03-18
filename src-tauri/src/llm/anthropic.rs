@@ -82,7 +82,7 @@ impl AnthropicProvider {
                 content: request.user_prompt,
             }],
             temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            max_tokens: if request.max_tokens > 0 { request.max_tokens } else { 2048 },
         };
 
         let resp = self

@@ -72,8 +72,14 @@ impl OllamaProvider {
         let start = Instant::now();
         let url = format!("{}/api/generate", self.base_url);
 
-        log::info!("[Ollama] POST {} — model={}, json_mode={}, temp={}, max_tokens={}", url, model, request.json_mode, request.temperature, request.max_tokens);
-        log::debug!("[Ollama] system_prompt length={}, user_prompt length={}", request.system_prompt.len(), request.user_prompt.len());
+        // Default max_tokens to 2048 if not set (0 means unlimited in Ollama, which can be very slow)
+        let max_tokens = if request.max_tokens > 0 { request.max_tokens } else { 2048 };
+
+        log::info!(
+            "[Ollama] POST {} — model={}, json_mode={}, temp={}, max_tokens={}, system_prompt={}chars, user_prompt={}chars",
+            url, model, request.json_mode, request.temperature, max_tokens,
+            request.system_prompt.len(), request.user_prompt.len()
+        );
 
         let body = GenerateRequest {
             model: model.to_string(),
@@ -87,7 +93,7 @@ impl OllamaProvider {
             },
             options: GenerateOptions {
                 temperature: request.temperature,
-                num_predict: request.max_tokens,
+                num_predict: max_tokens,
             },
         };
 
