@@ -63,36 +63,44 @@ pub fn run() {
             let llm_state = llm::create_llm_state(ai_settings);
             app.manage(llm_state);
 
-            // Start embedded HTTP API server in the background
+            // Start embedded HTTP API server in the background (if enabled)
             let api_db = Arc::new(
                 Database::new(app.path().app_data_dir().expect("app data dir"))
                     .expect("Failed to open API database connection"),
             );
-            let api_token = {
+            let (api_enabled, api_token, api_port, api_host) = {
                 let conn = api_db.conn.lock().unwrap();
+                // Ensure singleton row exists
+                conn.execute("INSERT OR IGNORE INTO appSettings (id) VALUES ('singleton')", []).ok();
                 conn.query_row(
-                    "SELECT mcpToken FROM appSettings WHERE id = 'singleton'",
+                    "SELECT apiEnabled, mcpToken, apiPort, apiHost FROM appSettings WHERE id = 'singleton'",
                     [],
-                    |row| row.get::<_, Option<String>>(0),
+                    |row| Ok((
+                        row.get::<_, i64>(0).unwrap_or(0) != 0,
+                        row.get::<_, Option<String>>(1).unwrap_or(None).unwrap_or_default(),
+                        row.get::<_, i64>(2).unwrap_or(3100) as u16,
+                        row.get::<_, String>(3).unwrap_or_else(|_| "127.0.0.1".to_string()),
+                    )),
                 )
-                .ok()
-                .flatten()
-                .unwrap_or_default()
+                .unwrap_or((false, String::new(), 3100, "127.0.0.1".to_string()))
             };
 
-            if !api_token.is_empty() {
-                let port: u16 = std::env::var("OPPORTUN_API_PORT")
-                    .ok()
-                    .and_then(|p| p.parse().ok())
-                    .unwrap_or(3100);
-                let host = std::env::var("OPPORTUN_API_HOST")
-                    .unwrap_or_else(|_| "127.0.0.1".to_string());
+            // Env vars override DB settings
+            let api_port = std::env::var("OPPORTUN_API_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(api_port);
+            let api_host = std::env::var("OPPORTUN_API_HOST")
+                .unwrap_or(api_host);
 
+            if api_enabled && !api_token.is_empty() {
                 tauri::async_runtime::spawn(async move {
-                    api::start_api_server(api_db, api_token, port, host).await;
+                    api::start_api_server(api_db, api_token, api_port, api_host).await;
                 });
+            } else if !api_enabled {
+                log::info!("[API] HTTP API is disabled. Enable it in Settings.");
             } else {
-                log::info!("[API] No MCP token configured — HTTP API not started. Set a token in Settings.");
+                log::info!("[API] No API token configured — HTTP API not started. Set a token in Settings.");
             }
 
             app.manage(database);
@@ -180,6 +188,8 @@ pub fn run() {
             commands::settings::get_mcp_token,
             commands::settings::regenerate_mcp_token,
             commands::settings::is_sync_available,
+            commands::settings::get_api_settings,
+            commands::settings::update_api_settings,
             // Sync (behind feature flag)
             #[cfg(feature = "sync")]
             commands::sync::get_sync_status,
