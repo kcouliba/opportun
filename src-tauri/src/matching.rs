@@ -143,6 +143,52 @@ pub fn parse_json_array(json: &Option<String>) -> Vec<String> {
     }
 }
 
+/// Calculate match score from a DB connection and API create input.
+/// Used by the embedded HTTP API.
+pub fn calculate_match_score_from_db(
+    conn: &rusqlite::Connection,
+    profile_id: &str,
+    input: &crate::api::routes::CreateLeadInput,
+) -> MatchResult {
+    let profile_data = conn
+        .query_row(
+            "SELECT \"technologies\", \"domains\", \"minimumTjm\", \"targetTjm\",
+                    \"preferredLocations\", \"blacklistedClients\", \"blacklistedDomains\"
+             FROM \"Profile\" WHERE \"id\" = ?1",
+            rusqlite::params![profile_id],
+            |row| {
+                Ok(ProfileMatchData {
+                    technologies: parse_json_array(&row.get::<_, Option<String>>(0)?),
+                    domains: parse_json_array(&row.get::<_, Option<String>>(1)?),
+                    minimum_tjm: row.get(2)?,
+                    target_tjm: row.get(3)?,
+                    preferred_locations: parse_json_array(&row.get::<_, Option<String>>(4)?),
+                    blacklisted_clients: parse_json_array(&row.get::<_, Option<String>>(5)?),
+                    blacklisted_domains: parse_json_array(&row.get::<_, Option<String>>(6)?),
+                })
+            },
+        )
+        .unwrap_or(ProfileMatchData {
+            technologies: vec![],
+            domains: vec![],
+            minimum_tjm: None,
+            target_tjm: None,
+            preferred_locations: vec![],
+            blacklisted_clients: vec![],
+            blacklisted_domains: vec![],
+        });
+
+    let lead_data = LeadMatchData {
+        required_technologies: parse_json_array(&input.required_technologies),
+        required_domains: parse_json_array(&input.required_domains),
+        offered_rate: input.offered_rate,
+        location: input.location.clone(),
+        client: input.client.clone(),
+    };
+
+    calculate_match_score(&profile_data, &lead_data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

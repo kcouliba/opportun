@@ -1,3 +1,4 @@
+mod api;
 mod commands;
 mod db;
 mod llm;
@@ -7,6 +8,7 @@ mod models;
 mod sync;
 
 use db::Database;
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -60,6 +62,38 @@ pub fn run() {
             #[cfg(not(feature = "embedded-llm"))]
             let llm_state = llm::create_llm_state(ai_settings);
             app.manage(llm_state);
+
+            // Start embedded HTTP API server in the background
+            let api_db = Arc::new(
+                Database::new(app.path().app_data_dir().expect("app data dir"))
+                    .expect("Failed to open API database connection"),
+            );
+            let api_token = {
+                let conn = api_db.conn.lock().unwrap();
+                conn.query_row(
+                    "SELECT mcpToken FROM appSettings WHERE id = 'singleton'",
+                    [],
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_default()
+            };
+
+            if !api_token.is_empty() {
+                let port: u16 = std::env::var("OPPORTUN_API_PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(3100);
+                let host = std::env::var("OPPORTUN_API_HOST")
+                    .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+                tauri::async_runtime::spawn(async move {
+                    api::start_api_server(api_db, api_token, port, host).await;
+                });
+            } else {
+                log::info!("[API] No MCP token configured — HTTP API not started. Set a token in Settings.");
+            }
 
             app.manage(database);
 
