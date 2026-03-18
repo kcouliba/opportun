@@ -42,7 +42,7 @@ export default function McpPanel() {
   const handleCopy = async () => {
     if (!settings?.token) return;
     await navigator.clipboard.writeText(settings.token);
-    showToast(t("mcp.tokenCopied"), "success");
+    showToast(t("api.tokenCopied"), "success");
   };
 
   const handleRegenerate = async () => {
@@ -50,9 +50,9 @@ export default function McpPanel() {
       const newToken = await invoke<string>("regenerate_mcp_token");
       setSettings((s) => s ? { ...s, token: newToken } : s);
       setRevealed(true);
-      showToast(t("mcp.tokenRegenerated"), "success");
+      showToast(t("api.tokenRegenerated"), "success");
     } catch (e) {
-      showToast(t("mcp.failedRegenerate", { error: e }), "error");
+      showToast(t("api.failedRegenerate", { error: e }), "error");
     }
   };
 
@@ -131,7 +131,7 @@ export default function McpPanel() {
       {/* Token */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {t("mcp.bearerToken")}
+          {t("api.bearerToken")}
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -158,10 +158,10 @@ export default function McpPanel() {
       {/* Regenerate */}
       <div>
         <button onClick={handleRegenerate} className="btn btn-secondary text-sm">
-          {t("mcp.regenerateToken")}
+          {t("api.regenerateToken")}
         </button>
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-          {t("mcp.regenerateWarning")}
+          {t("api.regenerateWarning")}
         </p>
       </div>
 
@@ -171,7 +171,7 @@ export default function McpPanel() {
           onClick={() => setShowHelp((h) => !h)}
           className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
         >
-          {showHelp ? t("mcp.hideInstructions") : t("mcp.howToUse")}
+          {showHelp ? t("api.hideInstructions") : t("api.howToUse")}
         </button>
         {showHelp && (
           <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs font-mono overflow-x-auto whitespace-pre">

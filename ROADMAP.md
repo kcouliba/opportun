@@ -24,7 +24,7 @@
 - Error boundaries per page with fallback UI
 - Dynamic lead sources management in Settings
 - Watch sources for automated job board monitoring with bulk import
-- MCP server with 18 tools (direct SQLite), HTTP transport with bearer token auth
+- Embedded REST API with bearer token auth, configurable from Settings
 - Encrypted cross-device sync via relay (feature-flagged `--features sync`)
 - Responsive left sidebar navigation with sync indicator
 - Dark mode, toast notifications
@@ -148,8 +148,8 @@ _Deeper value for power users._
 
 _Extend beyond the app._
 
-- [x] **MCP HTTP transport** — HTTP/SSE transport with bearer token auth (alongside existing stdio), configurable via Settings
-- [ ] **MCP improvements** — Add document generation, mission management, and profile tools to MCP server
+- [x] **Embedded REST API** — axum HTTP server built into the Tauri app with bearer token auth, enable/disable from Settings
+- [ ] **API improvements** — Add document generation, mission management, and profile endpoints
 
 ---
 

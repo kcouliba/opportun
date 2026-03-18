@@ -11,7 +11,7 @@ Freelance pipeline manager — track leads, missions, and revenue with AI-powere
 - **Resume export** — generate a professional PDF resume from your profile and mission history
 - **Income forecast** — 6-month projection with secured + weighted pipeline income
 - **Cross-device sync** — end-to-end encrypted sync via ephemeral relay (XChaCha20-Poly1305, feature-flagged)
-- **MCP server** — 18 tools for programmatic access via stdio or HTTP with bearer token auth
+- **REST API** — embedded HTTP API for external integrations (n8n, automation), configurable from Settings
 - **Internationalization** — French and English, with browser locale detection
 - **Command palette** — Ctrl+K to search and navigate anywhere
 
@@ -23,7 +23,7 @@ Freelance pipeline manager — track leads, missions, and revenue with AI-powere
 | Backend | Rust, Tauri v2, SQLite (rusqlite) |
 | AI | Ollama, OpenAI, Anthropic, llama.cpp (optional) |
 | i18n | react-i18next |
-| MCP | @modelcontextprotocol/sdk (stdio + HTTP) |
+| API | Embedded axum HTTP server with bearer auth |
 
 ## Prerequisites
 
@@ -78,8 +78,6 @@ npx tauri dev --features sync
 | `npm run test` | Run Vitest tests |
 | `npm run test:rust` | Run Rust tests |
 | `npm run test:all` | Run JS + Rust tests |
-| `npm run mcp` | Start MCP server (stdio) |
-| `npm run mcp:http` | Start MCP server (HTTP, requires token) |
 
 ## Keyboard Shortcuts
 
@@ -118,9 +116,9 @@ npx tauri dev --features sync
                   +-------------+
 
 +--------------------------------------------------+
-|              MCP Server (Node.js)                 |
-|  stdio or HTTP transport, direct SQLite access    |
-|  18 tools: leads, activities, stats, stages       |
+|           Embedded REST API (axum)                |
+|  Starts with the app, bearer token auth           |
+|  /api/leads, /api/stats, /api/health              |
 +--------------------------------------------------+
 ```
 
@@ -133,7 +131,7 @@ src/                        # React frontend
   hooks/                    # React hooks (AI, sync, resume, etc.)
   locales/                  # i18n translation files (en, fr)
   types/                    # TypeScript interfaces
-  mcp/                      # MCP server (stdio + HTTP)
+  locales/                  # i18n translation files (en, fr)
   i18n.ts                   # i18n configuration
 src-tauri/                  # Rust backend
   src/
@@ -152,33 +150,35 @@ src-tauri/                  # Rust backend
   release.yml               # Cross-platform builds on tag
 ```
 
-## MCP Server
+## REST API
 
-The MCP server provides programmatic access to your pipeline data.
+The app embeds an HTTP API server for external integrations (n8n, automation tools).
 
-**Stdio** (for Claude Code, Claude Desktop):
+**Setup:** Enable in Settings > API Integration. Configure port, host, and bearer token.
+
+**Endpoints:**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/leads` | List leads (filtering, pagination) |
+| POST | `/api/leads` | Create lead (auto match scoring) |
+| GET | `/api/leads/{id}` | Get single lead |
+| PUT | `/api/leads/{id}` | Update lead |
+| DELETE | `/api/leads/{id}` | Delete lead |
+| PUT | `/api/leads/{id}/stage` | Update stage |
+| GET | `/api/leads/{id}/activities` | List activities |
+| POST | `/api/leads/{id}/activities` | Create activity |
+| GET | `/api/stats` | Pipeline statistics |
+
+**Example:**
 ```bash
-npm run mcp
-```
+curl http://127.0.0.1:3100/api/leads \
+  -H "Authorization: Bearer <your-token>"
 
-**HTTP** (for external services):
-```bash
-OPPORTUN_MCP_TOKEN=your-token npm run mcp:http
-# Connects to http://127.0.0.1:3100/mcp
-```
-
-The token can also be auto-generated in Settings. Configure in Claude Desktop:
-
-```json
-{
-  "mcpServers": {
-    "opportun": {
-      "command": "npx",
-      "args": ["tsx", "src/mcp/server.ts"],
-      "env": { "OPPORTUN_DB_PATH": "/path/to/opportun.db" }
-    }
-  }
-}
+curl -X POST http://127.0.0.1:3100/api/leads \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"client":"Acme","title":"Dev Fullstack","source":"n8n"}'
 ```
 
 ## Releasing

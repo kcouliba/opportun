@@ -512,11 +512,11 @@
     "french": "Français"
   },
 
-  "mcp": {
+  "api": {
     "bearerToken": "Token d'authentification",
-    "tokenHint": "(utilisé pour l'authentification du transport HTTP)",
+    "tokenHint": "(utilisé pour l'authentification de l'API HTTP)",
     "regenerateToken": "Régénérer le token",
-    "regenerateWarning": "Les connexions MCP existantes devront être mises à jour.",
+    "regenerateWarning": "Les connexions API existantes devront être mises à jour.",
     "howToUse": "Comment utiliser",
     "hideInstructions": "Masquer les instructions",
     "tokenCopied": "Token copié dans le presse-papier",
