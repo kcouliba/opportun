@@ -531,6 +531,34 @@ export default function WatchSourcesPage() {
                               {lead.location && <span>{lead.location}</span>}
                             </div>
 
+                            {lead.listingUrl && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <a
+                                  href={lead.listingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 truncate max-w-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title={lead.listingUrl}
+                                >
+                                  {lead.listingUrl.replace(/^https?:\/\//, "").split("/").slice(0, 2).join("/")}
+                                </a>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(lead.listingUrl!);
+                                    showToast(t("common.copied"), "success");
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
+                                  title={t("common.copyToClipboard")}
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+
                             {lead.snippet && (
                               <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
                                 {lead.snippet}
@@ -540,25 +568,29 @@ export default function WatchSourcesPage() {
 
                           {/* Actions */}
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            {lead.listingUrl && (
-                              <a
-                                href={lead.listingUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View listing
-                              </a>
-                            )}
                             {lead.status === "new" && (
-                              <button
-                                onClick={() => handleImportSingle(lead.id)}
-                                disabled={importing}
-                                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-                              >
-                                {t("watchSources.importLead")}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleImportSingle(lead.id)}
+                                  disabled={importing}
+                                  className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                >
+                                  {t("watchSources.importLead")}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await invoke("dismiss_discovered_leads", { ids: [lead.id] });
+                                      await loadLeads(selectedSourceId);
+                                    } catch {
+                                      showToast(t("watchSources.failedDismiss"), "error");
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-300 dark:border-gray-600 rounded transition-colors whitespace-nowrap"
+                                >
+                                  {t("watchSources.dismiss")}
+                                </button>
+                              </>
                             )}
                             {lead.status === "imported" && lead.importedLeadId && (
                               <Link
