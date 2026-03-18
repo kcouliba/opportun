@@ -15,7 +15,7 @@ pub enum LlmError {
     InferenceFailed(String),
     #[error("Invalid JSON in LLM response: {0}")]
     InvalidJson(String),
-    #[error("Request timed out after {0}s")]
+    #[error("AI request timed out after {0}s. Try a smaller model for faster results.")]
     Timeout(u64),
 }
 

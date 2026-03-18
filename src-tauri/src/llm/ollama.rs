@@ -57,7 +57,7 @@ struct PullProgress {
 impl OllamaProvider {
     pub fn new(base_url: String) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_secs(300))
             .build()
             .unwrap_or_default();
 
@@ -99,8 +99,8 @@ impl OllamaProvider {
             .await
             .map_err(|e| {
                 if e.is_timeout() {
-                    log::error!("[Ollama] Request timed out after 120s");
-                    LlmError::Timeout(120)
+                    log::error!("[Ollama] Request timed out after 300s — model may be too large for available hardware");
+                    LlmError::Timeout(300)
                 } else if e.is_connect() {
                     log::error!("[Ollama] Connection failed to {} — is Ollama running?", self.base_url);
                     LlmError::ProviderUnavailable
