@@ -188,7 +188,12 @@ async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
             location: hit.location,
             rate: hit.offered_rate,
             snippet: hit.description.as_deref().map(|d| {
-                if d.len() > 200 { format!("{}...", &d[..200]) } else { d.to_string() }
+                if d.chars().count() > 200 {
+                    let truncated: String = d.chars().take(200).collect();
+                    format!("{}...", truncated)
+                } else {
+                    d.to_string()
+                }
             }),
         })
         .collect();
