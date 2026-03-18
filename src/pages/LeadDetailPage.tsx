@@ -801,6 +801,31 @@ export default function LeadDetailPage() {
                   <div>
                     <dt className="text-gray-500">{t("leadDetail.source")}</dt>
                     <dd className="font-medium capitalize">{lead.source}</dd>
+                    {lead.sourceUrl && (
+                      <dd className="flex items-center gap-1.5 mt-1">
+                        <a
+                          href={lead.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 truncate max-w-[200px]"
+                          title={lead.sourceUrl}
+                        >
+                          {lead.sourceUrl.replace(/^https?:\/\//, "").split("/").slice(0, 2).join("/")}
+                        </a>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(lead.sourceUrl!);
+                            showToast(t("common.copied"), "success");
+                          }}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
+                          title={t("common.copyToClipboard")}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </dd>
+                    )}
                   </div>
                   {lead.contentLanguage && (
                     <div>
@@ -1224,14 +1249,31 @@ export default function LeadDetailPage() {
                     {t("common.edit")}
                   </button>
                   {lead.sourceUrl && (
-                    <a
-                      href={lead.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full py-2 px-4 text-center bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      {t("leadDetail.sourceUrl")}
-                    </a>
+                    <div className="flex gap-2">
+                      <a
+                        href={lead.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        {t("leadDetail.openListing")}
+                      </a>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(lead.sourceUrl!);
+                          showToast(t("common.copied"), "success");
+                        }}
+                        className="py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        title={t("common.copyToClipboard")}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                   {confirmDelete ? (
                     <div className="flex gap-2">

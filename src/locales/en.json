@@ -225,7 +225,8 @@
     "docGenerated": "{{type}} generated",
     "failedGenerateDoc": "Failed to generate document",
     "keyQuestions": "Key Questions",
-    "profileDefault": "Profile Default"
+    "profileDefault": "Profile Default",
+    "openListing": "Open Listing"
   },
 
   "missions": {

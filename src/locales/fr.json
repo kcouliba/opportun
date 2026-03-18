@@ -225,7 +225,8 @@
     "docGenerated": "{{type}} généré",
     "failedGenerateDoc": "Échec de la génération du document",
     "keyQuestions": "Questions clés",
-    "profileDefault": "Par défaut du profil"
+    "profileDefault": "Par défaut du profil",
+    "openListing": "Ouvrir l'annonce"
   },
 
   "missions": {
