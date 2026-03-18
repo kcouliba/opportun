@@ -311,9 +311,15 @@ pub async fn check_watch_source(
     let mut new_leads = Vec::new();
 
     for listing in &listings {
-        // Skip if URL already known
+        // If URL already known, update description if we now have a fuller one
         if let Some(ref u) = listing.url {
             if existing_urls.contains(u) {
+                if let Some(ref desc) = listing.description {
+                    conn.execute(
+                        "UPDATE \"DiscoveredLead\" SET \"description\" = ?1 WHERE \"listingUrl\" = ?2 AND (\"description\" IS NULL OR length(\"description\") < length(?1))",
+                        rusqlite::params![desc, u],
+                    ).ok();
+                }
                 continue;
             }
         }
