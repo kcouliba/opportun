@@ -156,7 +156,7 @@ export default function WatchSourcesPage() {
       loadSources();
       if (selectedSourceId) loadLeads(selectedSourceId);
     }
-  }, [checkingAll, checkingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [checkingAll, checkingId, loadSources, loadLeads, selectedSourceId]);
 
   // Selection helpers
   const toggleSelect = (id: string) => {
