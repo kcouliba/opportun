@@ -128,6 +128,74 @@ pub fn delete_watch_source(db: State<Database>, id: String) -> Result<(), String
 
 // ── Discovery ───────────────────────────────────────────────────────────────
 
+/// JSON API response format (from adapter services like leads-api)
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdapterResponse {
+    hits: Vec<AdapterHit>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdapterHit {
+    title: Option<String>,
+    client: Option<String>,
+    source_url: Option<String>,
+    location: Option<String>,
+    #[allow(dead_code)]
+    remote_policy: Option<String>,
+    offered_rate: Option<i64>,
+    description: Option<String>,
+    #[allow(dead_code)]
+    source: Option<String>,
+}
+
+/// Try to fetch URL as a JSON API. Returns listings if it's a structured API response.
+async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .ok()?;
+
+    let resp = client.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let body = resp.text().await.ok()?;
+
+    // Only parse as JSON if content-type is JSON or body starts with {
+    if !content_type.contains("json") && !body.trim_start().starts_with('{') {
+        return None;
+    }
+
+    let parsed: AdapterResponse = serde_json::from_str(&body).ok()?;
+
+    let listings = parsed
+        .hits
+        .into_iter()
+        .map(|hit| ExtractedListing {
+            title: hit.title,
+            client: hit.client,
+            url: hit.source_url,
+            location: hit.location,
+            rate: hit.offered_rate,
+            snippet: hit.description.as_deref().map(|d| {
+                if d.len() > 200 { format!("{}...", &d[..200]) } else { d.to_string() }
+            }),
+        })
+        .collect();
+
+    Some(listings)
+}
+
 #[tauri::command]
 pub async fn check_watch_source(
     db: State<'_, Database>,
@@ -145,52 +213,54 @@ pub async fn check_watch_source(
         .map_err(|_| "Watch source not found".to_string())?
     };
 
-    // 2. Fetch page text
-    let page_text = super::import::fetch_url_text_inner(&url).await?;
-
-    // Truncate to ~12k chars to fit context
-    let truncated = if page_text.len() > 12000 {
-        &page_text[..12000]
+    // 2. Try JSON API first (adapter services), fall back to HTML + AI
+    let listings = if let Some(api_listings) = try_fetch_json_api(&url).await {
+        log::info!("[WatchSource] Fetched {} listings from JSON API", api_listings.len());
+        api_listings
     } else {
-        &page_text
+        // Fetch as HTML page and use AI extraction
+        let page_text = super::import::fetch_url_text_inner(&url).await?;
+        let truncated = if page_text.len() > 12000 {
+            &page_text[..12000]
+        } else {
+            &page_text
+        };
+
+        let tier = {
+            let settings = llm.settings.read().unwrap();
+            crate::llm::tier::ModelTier::detect(&settings.provider, &settings.model_name)
+        };
+
+        let gbnf_grammar = if tier.is_basic() {
+            #[cfg(feature = "embedded-llm")]
+            { Some(crate::llm::grammars::JOB_BOARD_EXTRACT.to_string()) }
+            #[cfg(not(feature = "embedded-llm"))]
+            { None }
+        } else {
+            None
+        };
+
+        let request = LlmRequest {
+            system_prompt: crate::llm::prompts::JOB_BOARD_EXTRACT_SYSTEM.to_string(),
+            user_prompt: truncated.to_string(),
+            temperature: 0.0,
+            max_tokens: 0,
+            json_mode: true,
+            gbnf_grammar,
+        };
+
+        let response = llm
+            .generate(request)
+            .await
+            .map_err(|e| format!("AI extraction failed: {e}"))?;
+
+        let cleaned = crate::llm::clean_json_response(&response.content)
+            .map_err(|e| format!("Failed to parse AI response: {e}"))?;
+
+        serde_json::from_str(&cleaned).map_err(|e| format!("Invalid JSON from AI: {e}"))?
     };
 
-    // 3. AI extraction
-    let tier = {
-        let settings = llm.settings.read().unwrap();
-        crate::llm::tier::ModelTier::detect(&settings.provider, &settings.model_name)
-    };
-
-    let gbnf_grammar = if tier.is_basic() {
-        #[cfg(feature = "embedded-llm")]
-        { Some(crate::llm::grammars::JOB_BOARD_EXTRACT.to_string()) }
-        #[cfg(not(feature = "embedded-llm"))]
-        { None }
-    } else {
-        None
-    };
-
-    let request = LlmRequest {
-        system_prompt: crate::llm::prompts::JOB_BOARD_EXTRACT_SYSTEM.to_string(),
-        user_prompt: truncated.to_string(),
-        temperature: 0.0,
-        max_tokens: 0,
-        json_mode: true,
-        gbnf_grammar,
-    };
-
-    let response = llm
-        .generate(request)
-        .await
-        .map_err(|e| format!("AI extraction failed: {e}"))?;
-
-    let cleaned = crate::llm::clean_json_response(&response.content)
-        .map_err(|e| format!("Failed to parse AI response: {e}"))?;
-
-    let listings: Vec<ExtractedListing> =
-        serde_json::from_str(&cleaned).map_err(|e| format!("Invalid JSON from AI: {e}"))?;
-
-    // 4. Deduplicate and insert
+    // 3. Deduplicate and insert
     let conn = db.conn.lock().unwrap();
 
     // Collect existing listing URLs for this source
