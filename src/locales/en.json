@@ -226,7 +226,9 @@
     "failedGenerateDoc": "Failed to generate document",
     "keyQuestions": "Key Questions",
     "profileDefault": "Profile Default",
-    "openListing": "Open Listing"
+    "openListing": "Open Listing",
+    "refreshFromSource": "Refresh from Source",
+    "resyncSuccess": "Lead updated from source"
   },
 
   "missions": {

@@ -226,7 +226,9 @@
     "failedGenerateDoc": "Échec de la génération du document",
     "keyQuestions": "Questions clés",
     "profileDefault": "Par défaut du profil",
-    "openListing": "Ouvrir l'annonce"
+    "openListing": "Ouvrir l'annonce",
+    "refreshFromSource": "Rafraîchir depuis la source",
+    "resyncSuccess": "Prospect mis à jour depuis la source"
   },
 
   "missions": {

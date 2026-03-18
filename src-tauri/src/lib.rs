@@ -182,6 +182,7 @@ pub fn run() {
             commands::watch_sources::undismiss_discovered_leads,
             commands::watch_sources::count_new_discovered_leads,
             commands::watch_sources::import_discovered_lead,
+            commands::watch_sources::resync_lead_from_source,
             commands::watch_sources::batch_import_discovered_leads,
             // Settings
             commands::settings::get_lead_sources,

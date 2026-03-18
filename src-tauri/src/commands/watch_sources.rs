@@ -701,6 +701,152 @@ pub async fn import_discovered_lead(
     .map_err(|e| e.to_string())
 }
 
+/// Re-sync a lead with its source discovered lead data.
+/// Only updates: description, offeredRate, location, remotePolicy, requiredTechnologies, requiredDomains.
+/// Recalculates match score. Never touches stage, notes, contacts, or next action.
+#[tauri::command]
+pub fn resync_lead_from_source(
+    db: State<Database>,
+    lead_id: String,
+) -> Result<Lead, String> {
+    let conn = db.conn.lock().unwrap();
+
+    // Find the discovered lead linked to this lead
+    let discovered = conn
+        .query_row(
+            "SELECT \"id\", \"title\", \"client\", \"location\", \"rate\", \"description\", \"listingUrl\"
+             FROM \"DiscoveredLead\" WHERE \"importedLeadId\" = ?1",
+            rusqlite::params![lead_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                ))
+            },
+        )
+        .map_err(|_| "No source found for this lead. It may not have been imported from a watch source.".to_string())?;
+
+    let (_disc_id, _disc_title, _disc_client, disc_location, disc_rate, disc_description, _disc_url) = discovered;
+
+    // Build update — only source-refreshable fields
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut updates = vec!["\"updatedAt\" = ?1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(now)];
+
+    if let Some(ref desc) = disc_description {
+        let idx = params.len() + 1;
+        updates.push(format!("\"description\" = ?{}", idx));
+        params.push(Box::new(desc.clone()));
+    }
+    if let Some(rate) = disc_rate {
+        let idx = params.len() + 1;
+        updates.push(format!("\"offeredRate\" = ?{}", idx));
+        params.push(Box::new(rate));
+    }
+    if let Some(ref loc) = disc_location {
+        let idx = params.len() + 1;
+        updates.push(format!("\"location\" = ?{}", idx));
+        params.push(Box::new(loc.clone()));
+    }
+
+    // Recalculate match score
+    let profile_id: String = conn
+        .query_row(
+            "SELECT \"profileId\" FROM \"Lead\" WHERE \"id\" = ?1",
+            rusqlite::params![lead_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Lead not found".to_string())?;
+
+    // Get current lead data for match scoring
+    let current_techs: Option<String> = conn
+        .query_row(
+            "SELECT \"requiredTechnologies\" FROM \"Lead\" WHERE \"id\" = ?1",
+            rusqlite::params![lead_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(None);
+
+    let match_input = crate::api::routes::CreateLeadInput {
+        client: _disc_client.unwrap_or_default(),
+        title: _disc_title.unwrap_or_default(),
+        source: String::new(),
+        description: disc_description.clone(),
+        source_url: None,
+        location: disc_location.clone(),
+        remote_policy: None,
+        offered_rate: disc_rate,
+        estimated_start_date: None,
+        estimated_duration: None,
+        required_technologies: current_techs,
+        required_domains: None,
+        contact_name: None,
+        contact_info: None,
+        notes: None,
+        next_action: None,
+        next_action_date: None,
+    };
+
+    let match_result = crate::matching::calculate_match_score_from_db(&conn, &profile_id, &match_input);
+    let score_idx = params.len() + 1;
+    updates.push(format!("\"matchScore\" = ?{}", score_idx));
+    params.push(Box::new(match_result.score));
+
+    let id_idx = params.len() + 1;
+    params.push(Box::new(lead_id.clone()));
+
+    let sql = format!(
+        "UPDATE \"Lead\" SET {} WHERE \"id\" = ?{}",
+        updates.join(", "),
+        id_idx
+    );
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, param_refs.as_slice())
+        .map_err(|e| format!("Resync failed: {}", e))?;
+
+    // Return updated lead
+    conn.query_row(
+        "SELECT * FROM \"Lead\" WHERE \"id\" = ?1",
+        rusqlite::params![lead_id],
+        |row| {
+            Ok(Lead {
+                id: row.get("id")?,
+                created_at: row.get("createdAt")?,
+                updated_at: row.get("updatedAt")?,
+                source: row.get("source")?,
+                source_url: row.get("sourceUrl")?,
+                client: row.get("client")?,
+                title: row.get("title")?,
+                description: row.get("description")?,
+                required_technologies: row.get("requiredTechnologies")?,
+                required_domains: row.get("requiredDomains")?,
+                location: row.get("location")?,
+                remote_policy: row.get("remotePolicy")?,
+                offered_rate: row.get("offeredRate")?,
+                estimated_revenue: row.get("estimatedRevenue")?,
+                estimated_start_date: row.get("estimatedStartDate")?,
+                estimated_duration: row.get("estimatedDuration")?,
+                stage: row.get("stage")?,
+                match_score: row.get("matchScore")?,
+                auto_filtered: row.get::<_, i64>("autoFiltered").map(|v| v != 0).unwrap_or(false),
+                notes: row.get("notes")?,
+                contact_name: row.get("contactName")?,
+                contact_info: row.get("contactInfo")?,
+                next_action: row.get("nextAction")?,
+                next_action_date: row.get("nextActionDate")?,
+                profile_id: row.get("profileId")?,
+                content_language: row.get("contentLanguage")?,
+            })
+        },
+    )
+    .map_err(|e| format!("Failed to fetch updated lead: {}", e))
+}
+
 #[tauri::command]
 pub async fn batch_import_discovered_leads(
     db: State<'_, Database>,
