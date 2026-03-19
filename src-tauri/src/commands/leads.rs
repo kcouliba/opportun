@@ -76,6 +76,25 @@ fn row_to_activity(row: &rusqlite::Row) -> rusqlite::Result<Activity> {
     })
 }
 
+/// Activity summary for a lead (computed, no AI)
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivitySummary {
+    pub count: usize,
+    pub last_activity_at: Option<String>,
+    pub last_activity_type: Option<String>,
+    pub first_activity_at: Option<String>,
+}
+
+/// Lead with computed activity summary
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LeadWithSummary {
+    #[serde(flatten)]
+    pub lead: Lead,
+    pub activity_summary: ActivitySummary,
+}
+
 /// Check if a sort field is valid
 fn is_valid_sort_field(field: &str) -> bool {
     matches!(
@@ -87,6 +106,7 @@ fn is_valid_sort_field(field: &str) -> bool {
             | "title"
             | "stage"
             | "offeredRate"
+            | "lastActivityAt"
     )
 }
 
@@ -213,13 +233,52 @@ pub(crate) fn query_leads_filtered(
     Ok(leads)
 }
 
+/// Fetch activity summaries for a list of lead IDs
+fn fetch_activity_summaries(
+    conn: &rusqlite::Connection,
+    lead_ids: &[String],
+) -> std::collections::HashMap<String, ActivitySummary> {
+    let mut summaries = std::collections::HashMap::new();
+
+    for lead_id in lead_ids {
+        let summary = conn
+            .query_row(
+                "SELECT COUNT(*),
+                        MAX(\"occurredAt\"),
+                        MIN(\"occurredAt\"),
+                        (SELECT \"type\" FROM \"Activity\" WHERE \"leadId\" = ?1 ORDER BY \"occurredAt\" DESC LIMIT 1)
+                 FROM \"Activity\" WHERE \"leadId\" = ?1",
+                rusqlite::params![lead_id],
+                |row| {
+                    Ok(ActivitySummary {
+                        count: row.get::<_, i64>(0)? as usize,
+                        last_activity_at: row.get(1)?,
+                        first_activity_at: row.get(2)?,
+                        last_activity_type: row.get(3)?,
+                    })
+                },
+            )
+            .unwrap_or(ActivitySummary {
+                count: 0,
+                last_activity_at: None,
+                first_activity_at: None,
+                last_activity_type: None,
+            });
+
+        summaries.insert(lead_id.clone(), summary);
+    }
+
+    summaries
+}
+
 #[tauri::command]
 pub fn list_leads(
     db: State<Database>,
     filters: LeadFilters,
-) -> Result<PaginatedResponse<Lead>, String> {
+) -> Result<PaginatedResponse<LeadWithSummary>, String> {
     let conn = db.conn.lock().unwrap();
 
+    let sort_by_activity = filters.sort_by.as_deref() == Some("lastActivityAt");
     let mut leads = query_leads_filtered(&conn, &filters)?;
 
     // Apply full-text search filter in memory
@@ -227,14 +286,42 @@ pub fn list_leads(
         leads.retain(|lead| matches_search(lead, q));
     }
 
+    // Fetch activity summaries
+    let lead_ids: Vec<String> = leads.iter().map(|l| l.id.clone()).collect();
+    let summaries = fetch_activity_summaries(&conn, &lead_ids);
+
+    // Build leads with summaries
+    let mut leads_with_summary: Vec<LeadWithSummary> = leads
+        .into_iter()
+        .map(|lead| {
+            let summary = summaries.get(&lead.id).cloned().unwrap_or(ActivitySummary {
+                count: 0,
+                last_activity_at: None,
+                first_activity_at: None,
+                last_activity_type: None,
+            });
+            LeadWithSummary { lead, activity_summary: summary }
+        })
+        .collect();
+
+    // Sort by last activity if requested (done in memory since it's a computed field)
+    if sort_by_activity {
+        let desc = filters.sort_order.as_deref() != Some("asc");
+        leads_with_summary.sort_by(|a, b| {
+            let a_date = a.activity_summary.last_activity_at.as_deref().unwrap_or("");
+            let b_date = b.activity_summary.last_activity_at.as_deref().unwrap_or("");
+            if desc { b_date.cmp(a_date) } else { a_date.cmp(b_date) }
+        });
+    }
+
     // Pagination
-    let total = leads.len();
+    let total = leads_with_summary.len();
     let limit = filters.limit.unwrap_or(100);
     let offset = filters.offset.unwrap_or(0);
 
     let start = (offset as usize).min(total);
     let end = ((offset + limit) as usize).min(total);
-    let data = leads[start..end].to_vec();
+    let data = leads_with_summary[start..end].to_vec();
 
     let has_more = end < total;
 

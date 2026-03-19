@@ -26,6 +26,13 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+interface ActivitySummary {
+  count: number;
+  lastActivityAt: string | null;
+  lastActivityType: string | null;
+  firstActivityAt: string | null;
+}
+
 interface Lead {
   id: string;
   client: string;
@@ -35,6 +42,22 @@ interface Lead {
   offeredRate: number | null;
   matchScore: number | null;
   createdAt: string;
+  activitySummary: ActivitySummary;
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 const stageColors: Record<string, string> = {
@@ -58,6 +81,8 @@ export default function LeadsPage() {
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [sortBy, setSortBy] = useState<string>("createdAt");
+  const [sortOrder, setSortOrder] = useState<string>("desc");
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   // Clear selection when filter, search, or view mode changes
@@ -65,9 +90,9 @@ export default function LeadsPage() {
     setSelected(new Set());
   }, [filter, debouncedSearch, viewMode]);
 
-  const fetchLeads = useCallback(async (query: string) => {
+  const fetchLeads = useCallback(async (query: string, sort: string, order: string) => {
     try {
-      const filters: Record<string, string> = {};
+      const filters: Record<string, string> = { sortBy: sort, sortOrder: order };
       if (query) filters.q = query;
       const result = await invoke<{ data: Lead[]; pagination: unknown }>("list_leads", { filters });
       setLeads(result.data || []);
@@ -80,8 +105,8 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
-    fetchLeads(debouncedSearch);
-  }, [debouncedSearch, fetchLeads]);
+    fetchLeads(debouncedSearch, sortBy, sortOrder);
+  }, [debouncedSearch, sortBy, sortOrder, fetchLeads]);
 
   const filteredLeads = filter === "all" ? leads : leads.filter((l) => l.stage === filter);
 
@@ -101,7 +126,7 @@ export default function LeadsPage() {
   const handleStageChange = async (leadId: string, newStage: string) => {
     try {
       await invoke("update_lead_stage", { id: leadId, stage: newStage });
-      await fetchLeads(debouncedSearch);
+      await fetchLeads(debouncedSearch, sortBy, sortOrder);
       showToast(t("leads.movedToStage", { stage: t(`stages.${newStage}`) }), "success");
     } catch {
       showToast(t("leads.failedUpdateStage"), "error");
@@ -128,7 +153,7 @@ export default function LeadsPage() {
       const count = await invoke<number>("batch_delete_leads", { ids });
       showToast(t("leads.leadsDeleted", { count }), "success");
       setSelected(new Set());
-      await fetchLeads(debouncedSearch);
+      await fetchLeads(debouncedSearch, sortBy, sortOrder);
     } catch {
       showToast(t("leads.failedDelete"), "error");
     }
@@ -140,7 +165,7 @@ export default function LeadsPage() {
       const count = await invoke<number>("batch_update_leads_stage", { ids, stage });
       showToast(t("leads.leadsMoved", { count, stage: t(`stages.${stage}`) }), "success");
       setSelected(new Set());
-      await fetchLeads(debouncedSearch);
+      await fetchLeads(debouncedSearch, sortBy, sortOrder);
     } catch {
       showToast(t("leads.failedUpdateStage"), "error");
     }
@@ -287,6 +312,27 @@ export default function LeadsPage() {
               {t("leads.showingResults", { query: debouncedSearch })}
             </p>
           )}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{t("leads.sortBy")}:</span>
+            <select
+              value={`${sortBy}:${sortOrder}`}
+              onChange={(e) => {
+                const [s, o] = e.target.value.split(":");
+                setSortBy(s);
+                setSortOrder(o);
+              }}
+              className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+            >
+              <option value="createdAt:desc">{t("leads.sortNewest")}</option>
+              <option value="createdAt:asc">{t("leads.sortOldest")}</option>
+              <option value="matchScore:desc">{t("leads.sortScoreHigh")}</option>
+              <option value="matchScore:asc">{t("leads.sortScoreLow")}</option>
+              <option value="offeredRate:desc">{t("leads.sortRateHigh")}</option>
+              <option value="offeredRate:asc">{t("leads.sortRateLow")}</option>
+              <option value="lastActivityAt:desc">{t("leads.sortLastActivity")}</option>
+              <option value="client:asc">{t("leads.sortClient")}</option>
+            </select>
+          </div>
         </div>
 
         {viewMode === "kanban" ? (
@@ -493,6 +539,16 @@ function LeadCard({
                 <p className="text-gray-600 dark:text-gray-400 text-sm">{lead.client}</p>
                 <p className="text-gray-500 text-xs mt-1">
                   via {lead.source} • {new Date(lead.createdAt).toLocaleDateString()}
+                  {lead.activitySummary.count > 0 && (
+                    <span className="ml-2">
+                      • {lead.activitySummary.count} {t("leads.activities")}
+                      {lead.activitySummary.lastActivityAt && (
+                        <span className="text-gray-400">
+                          {" "}({t("activityTypes." + (lead.activitySummary.lastActivityType || "note"))}, {formatRelativeDate(lead.activitySummary.lastActivityAt)})
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="text-right">
