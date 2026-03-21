@@ -150,6 +150,64 @@ struct AdapterHit {
     source: Option<String>,
 }
 
+/// Try to fetch URL as an RSS/Atom/JSON Feed. Returns listings if it's a valid feed.
+async fn try_fetch_rss_feed(url: &str) -> Option<Vec<ExtractedListing>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .ok()?;
+
+    let resp = client.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let body = resp.bytes().await.ok()?;
+    let feed = feed_rs::parser::parse(&body[..]).ok()?;
+
+    let listings: Vec<ExtractedListing> = feed
+        .entries
+        .into_iter()
+        .map(|entry| {
+            let title = entry.title.map(|t| t.content);
+            let url = entry.links.first().map(|l| l.href.clone());
+            let description = entry
+                .summary
+                .map(|s| s.content)
+                .or_else(|| entry.content.and_then(|c| c.body));
+            let snippet = description.as_deref().map(|d| {
+                // Strip HTML tags from feed content
+                let stripped = regex::Regex::new(r"<[^>]+>")
+                    .map(|re| re.replace_all(d, " ").to_string())
+                    .unwrap_or_else(|_| d.to_string());
+                let cleaned = stripped.split_whitespace().collect::<Vec<_>>().join(" ");
+                if cleaned.chars().count() > 200 {
+                    let truncated: String = cleaned.chars().take(200).collect();
+                    format!("{}...", truncated)
+                } else {
+                    cleaned
+                }
+            });
+
+            ExtractedListing {
+                title,
+                client: None,
+                location: None,
+                rate: None,
+                snippet,
+                description,
+                url,
+            }
+        })
+        .collect();
+
+    if listings.is_empty() {
+        return None;
+    }
+
+    Some(listings)
+}
+
 /// Try to fetch URL as a JSON API. Returns listings if it's a structured API response.
 async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
     let client = reqwest::Client::builder()
@@ -222,8 +280,11 @@ pub async fn check_watch_source(
         .map_err(|_| "Watch source not found".to_string())?
     };
 
-    // 2. Try JSON API first (adapter services), fall back to HTML + AI
-    let listings = if let Some(api_listings) = try_fetch_json_api(&url).await {
+    // 2. Try RSS feed first, then JSON API, fall back to HTML + AI
+    let listings = if let Some(rss_listings) = try_fetch_rss_feed(&url).await {
+        log::info!("[WatchSource] Fetched {} listings from RSS/Atom feed", rss_listings.len());
+        rss_listings
+    } else if let Some(api_listings) = try_fetch_json_api(&url).await {
         log::info!("[WatchSource] Fetched {} listings from JSON API", api_listings.len());
         api_listings
     } else {
