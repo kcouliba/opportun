@@ -151,3 +151,48 @@ pub fn update_api_settings(
     drop(conn);
     get_api_settings(db)
 }
+
+#[tauri::command]
+pub fn get_telemetry_enabled(db: tauri::State<'_, Database>) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT telemetryEnabled FROM appSettings WHERE id = 'singleton'",
+        [],
+        |row| Ok(row.get::<_, i64>(0).unwrap_or(0) != 0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_telemetry_enabled(
+    db: tauri::State<'_, Database>,
+    enabled: bool,
+) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE appSettings SET telemetryEnabled = ?1 WHERE id = 'singleton'",
+        [if enabled { 1i64 } else { 0 }],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Generate telemetry ID on first enable
+    if enabled {
+        let has_id: bool = conn
+            .query_row(
+                "SELECT telemetryId IS NOT NULL FROM appSettings WHERE id = 'singleton'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        if !has_id {
+            let new_id = uuid::Uuid::new_v4().to_string();
+            conn.execute(
+                "UPDATE appSettings SET telemetryId = ?1 WHERE id = 'singleton'",
+                [&new_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(enabled)
+}

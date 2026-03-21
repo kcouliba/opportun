@@ -1,0 +1,2 @@
+ALTER TABLE appSettings ADD COLUMN telemetryEnabled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE appSettings ADD COLUMN telemetryId TEXT;

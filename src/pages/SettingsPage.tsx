@@ -130,6 +130,9 @@ export default function SettingsPage() {
           {/* Sync (feature-flagged in backend) */}
           <SyncSection />
 
+          {/* Telemetry */}
+          <TelemetrySection />
+
           {/* Data */}
           <Section title={t("settings.data")}>
             <Field label={t("settings.exportBackup")} hint={t("settings.exportBackupHint")}>
@@ -184,6 +187,51 @@ function Field({
       </label>
       {children}
     </div>
+  );
+}
+
+function TelemetrySection() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    invoke<boolean>("get_telemetry_enabled").then(setEnabled).catch(() => {});
+  }, []);
+
+  const toggle = async () => {
+    try {
+      const newVal = await invoke<boolean>("set_telemetry_enabled", { enabled: !enabled });
+      setEnabled(newVal);
+    } catch {
+      // ignore
+    }
+  };
+
+  if (enabled === null) return null;
+
+  return (
+    <Section title={t("settings.telemetry")}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-sm">{t("settings.telemetryLabel")}</p>
+          <p className="text-xs text-gray-500">{t("settings.telemetryHint")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            enabled ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              enabled ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">{t("settings.telemetryDetails")}</p>
+    </Section>
   );
 }
 

@@ -4,6 +4,7 @@ mod db;
 mod llm;
 mod matching;
 mod models;
+mod telemetry;
 #[cfg(feature = "sync")]
 mod sync;
 
@@ -103,6 +104,13 @@ pub fn run() {
                 log::info!("[API] No API token configured — HTTP API not started. Set a token in Settings.");
             }
 
+            // Start telemetry heartbeat loop
+            let telemetry_db = Arc::new(
+                Database::new(app.path().app_data_dir().expect("app data dir"))
+                    .expect("Failed to open telemetry database connection"),
+            );
+            telemetry::start_telemetry_loop(telemetry_db);
+
             app.manage(database);
 
             Ok(())
@@ -192,6 +200,8 @@ pub fn run() {
             commands::settings::is_sync_available,
             commands::settings::get_api_settings,
             commands::settings::update_api_settings,
+            commands::settings::get_telemetry_enabled,
+            commands::settings::set_telemetry_enabled,
             // Sync (behind feature flag)
             #[cfg(feature = "sync")]
             commands::sync::get_sync_status,
