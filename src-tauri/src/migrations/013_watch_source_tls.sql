@@ -1,0 +1,1 @@
+ALTER TABLE "WatchSource" ADD COLUMN "skipTlsVerify" INTEGER NOT NULL DEFAULT 0;

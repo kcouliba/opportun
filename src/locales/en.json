@@ -655,6 +655,7 @@
     "new": "New",
     "dismissed": "Dismissed",
     "editSource": "Edit",
-    "deleteSource": "Delete"
+    "deleteSource": "Delete",
+    "skipTlsVerify": "Skip TLS verification (self-signed certificate)"
   }
 }

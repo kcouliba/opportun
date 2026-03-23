@@ -12,6 +12,7 @@ interface WatchSource {
   url: string;
   lastCheckedAt: string | null;
   lastFoundCount: number | null;
+  skipTlsVerify?: boolean;
 }
 
 interface DiscoveredLead {
@@ -40,10 +41,12 @@ export default function WatchSourcesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addUrl, setAddUrl] = useState("");
+  const [addSkipTls, setAddSkipTls] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
+  const [editSkipTls, setEditSkipTls] = useState(false);
   const { running: checkingAll, currentSourceId: checkingId, checkAll, checkOne } = useSourceChecker();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -99,10 +102,11 @@ export default function WatchSourcesPage() {
     setAddLoading(true);
     try {
       await invoke("create_watch_source", {
-        data: { name: addName.trim(), url: addUrl.trim() },
+        data: { name: addName.trim(), url: addUrl.trim(), skipTlsVerify: addSkipTls },
       });
       setAddName("");
       setAddUrl("");
+      setAddSkipTls(false);
       setShowAddForm(false);
       showToast(t("watchSources.sourceAdded"), "success");
       await loadSources();
@@ -118,7 +122,7 @@ export default function WatchSourcesPage() {
     try {
       await invoke("update_watch_source", {
         id,
-        data: { name: editName.trim(), url: editUrl.trim() },
+        data: { name: editName.trim(), url: editUrl.trim(), skipTlsVerify: editSkipTls },
       });
       setEditingId(null);
       showToast(t("watchSources.sourceUpdated"), "success");
@@ -293,6 +297,15 @@ export default function WatchSourcesPage() {
                     }
                   }}
                 />
+                <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={addSkipTls}
+                    onChange={(e) => setAddSkipTls(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  {t("watchSources.skipTlsVerify")}
+                </label>
                 <button
                   onClick={handleAdd}
                   disabled={addLoading}
@@ -390,6 +403,7 @@ export default function WatchSourcesPage() {
                               setEditingId(source.id);
                               setEditName(source.name);
                               setEditUrl(source.url);
+                              setEditSkipTls(source.skipTlsVerify ?? false);
                             }}
                             className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                             title={t("common.edit")}

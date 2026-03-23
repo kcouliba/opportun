@@ -505,6 +505,7 @@ pub struct WatchSource {
     pub last_checked_at: Option<String>,
     pub last_found_count: Option<i64>,
     pub profile_id: String,
+    pub skip_tls_verify: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -512,6 +513,8 @@ pub struct WatchSource {
 pub struct WatchSourceInput {
     pub name: String,
     pub url: String,
+    #[serde(default)]
+    pub skip_tls_verify: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

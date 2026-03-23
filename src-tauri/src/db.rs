@@ -26,6 +26,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/010_api_settings.sql"),
     include_str!("migrations/011_discovered_lead_description.sql"),
     include_str!("migrations/012_telemetry.sql"),
+    include_str!("migrations/013_watch_source_tls.sql"),
 ];
 
 impl Database {

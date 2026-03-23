@@ -16,7 +16,7 @@ pub fn list_watch_sources(db: State<Database>) -> Result<Vec<WatchSource>, Strin
     let mut stmt = conn
         .prepare(
             "SELECT \"id\", \"createdAt\", \"updatedAt\", \"name\", \"url\",
-                    \"lastCheckedAt\", \"lastFoundCount\", \"profileId\"
+                    \"lastCheckedAt\", \"lastFoundCount\", \"profileId\", \"skipTlsVerify\"
              FROM \"WatchSource\" ORDER BY \"createdAt\" DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -32,6 +32,7 @@ pub fn list_watch_sources(db: State<Database>) -> Result<Vec<WatchSource>, Strin
                 last_checked_at: row.get("lastCheckedAt")?,
                 last_found_count: row.get("lastFoundCount")?,
                 profile_id: row.get("profileId")?,
+                skip_tls_verify: row.get::<_, i64>("skipTlsVerify").unwrap_or(0) != 0,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -56,9 +57,9 @@ pub fn create_watch_source(
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO \"WatchSource\" (\"id\", \"createdAt\", \"updatedAt\", \"name\", \"url\", \"profileId\")
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![id, now, now, data.name, data.url, profile_id],
+        "INSERT INTO \"WatchSource\" (\"id\", \"createdAt\", \"updatedAt\", \"name\", \"url\", \"profileId\", \"skipTlsVerify\")
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![id, now, now, data.name, data.url, profile_id, if data.skip_tls_verify { 1i64 } else { 0 }],
     )
     .map_err(|e| e.to_string())?;
 
@@ -71,6 +72,7 @@ pub fn create_watch_source(
         last_checked_at: None,
         last_found_count: None,
         profile_id,
+        skip_tls_verify: data.skip_tls_verify,
     })
 }
 
@@ -85,8 +87,8 @@ pub fn update_watch_source(
 
     let affected = conn
         .execute(
-            "UPDATE \"WatchSource\" SET \"name\" = ?1, \"url\" = ?2, \"updatedAt\" = ?3 WHERE \"id\" = ?4",
-            rusqlite::params![data.name, data.url, now, id],
+            "UPDATE \"WatchSource\" SET \"name\" = ?1, \"url\" = ?2, \"updatedAt\" = ?3, \"skipTlsVerify\" = ?5 WHERE \"id\" = ?4",
+            rusqlite::params![data.name, data.url, now, id, if data.skip_tls_verify { 1i64 } else { 0 }],
         )
         .map_err(|e| e.to_string())?;
 
@@ -96,7 +98,7 @@ pub fn update_watch_source(
 
     conn.query_row(
         "SELECT \"id\", \"createdAt\", \"updatedAt\", \"name\", \"url\",
-                \"lastCheckedAt\", \"lastFoundCount\", \"profileId\"
+                \"lastCheckedAt\", \"lastFoundCount\", \"profileId\", \"skipTlsVerify\"
          FROM \"WatchSource\" WHERE \"id\" = ?1",
         rusqlite::params![id],
         |row| {
@@ -109,6 +111,7 @@ pub fn update_watch_source(
                 last_checked_at: row.get("lastCheckedAt")?,
                 last_found_count: row.get("lastFoundCount")?,
                 profile_id: row.get("profileId")?,
+                skip_tls_verify: row.get::<_, i64>("skipTlsVerify").unwrap_or(0) != 0,
             })
         },
     )
@@ -151,10 +154,10 @@ struct AdapterHit {
 }
 
 /// Try to fetch URL as an RSS/Atom/JSON Feed. Returns listings if it's a valid feed.
-async fn try_fetch_rss_feed(url: &str) -> Option<Vec<ExtractedListing>> {
+async fn try_fetch_rss_feed(url: &str, skip_tls_verify: bool) -> Option<Vec<ExtractedListing>> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(skip_tls_verify)
         .build()
         .ok()?;
 
@@ -210,10 +213,10 @@ async fn try_fetch_rss_feed(url: &str) -> Option<Vec<ExtractedListing>> {
 }
 
 /// Try to fetch URL as a JSON API. Returns listings if it's a structured API response.
-async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
+async fn try_fetch_json_api(url: &str, skip_tls_verify: bool) -> Option<Vec<ExtractedListing>> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(skip_tls_verify)
         .build()
         .ok()?;
 
@@ -272,21 +275,25 @@ pub async fn check_watch_source(
     source_id: String,
 ) -> Result<Vec<DiscoveredLead>, String> {
     // 1. Get the source
-    let (url, profile_id) = {
+    let (url, profile_id, skip_tls) = {
         let conn = db.conn.lock().unwrap();
         conn.query_row(
-            "SELECT \"url\", \"profileId\" FROM \"WatchSource\" WHERE \"id\" = ?1",
+            "SELECT \"url\", \"profileId\", \"skipTlsVerify\" FROM \"WatchSource\" WHERE \"id\" = ?1",
             rusqlite::params![source_id],
-            |row| Ok((row.get::<_, String>("url")?, row.get::<_, String>("profileId")?)),
+            |row| Ok((
+                row.get::<_, String>("url")?,
+                row.get::<_, String>("profileId")?,
+                row.get::<_, i64>("skipTlsVerify").unwrap_or(0) != 0,
+            )),
         )
         .map_err(|_| "Watch source not found".to_string())?
     };
 
     // 2. Try RSS feed first, then JSON API, fall back to HTML + AI
-    let listings = if let Some(rss_listings) = try_fetch_rss_feed(&url).await {
+    let listings = if let Some(rss_listings) = try_fetch_rss_feed(&url, skip_tls).await {
         log::info!("[WatchSource] Fetched {} listings from RSS/Atom feed", rss_listings.len());
         rss_listings
-    } else if let Some(api_listings) = try_fetch_json_api(&url).await {
+    } else if let Some(api_listings) = try_fetch_json_api(&url, skip_tls).await {
         log::info!("[WatchSource] Fetched {} listings from JSON API", api_listings.len());
         api_listings
     } else {
