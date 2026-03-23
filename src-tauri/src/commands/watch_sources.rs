@@ -154,6 +154,7 @@ struct AdapterHit {
 async fn try_fetch_rss_feed(url: &str) -> Option<Vec<ExtractedListing>> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
+        .danger_accept_invalid_certs(true)
         .build()
         .ok()?;
 
@@ -212,6 +213,7 @@ async fn try_fetch_rss_feed(url: &str) -> Option<Vec<ExtractedListing>> {
 async fn try_fetch_json_api(url: &str) -> Option<Vec<ExtractedListing>> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
+        .danger_accept_invalid_certs(true)
         .build()
         .ok()?;
 
