@@ -348,6 +348,15 @@ export default function WatchSourcesPage() {
                         onChange={(e) => setEditUrl(e.target.value)}
                         className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
+                      <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={editSkipTls}
+                          onChange={(e) => setEditSkipTls(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        {t("watchSources.skipTlsVerify")}
+                      </label>
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEdit(source.id)}
